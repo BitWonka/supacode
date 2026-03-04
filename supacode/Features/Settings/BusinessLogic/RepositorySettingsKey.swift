@@ -33,26 +33,20 @@ nonisolated struct RepositorySettingsKey: SharedKey {
       }
       let path = repositorySettingsURL.path(percentEncoded: false)
       SupaLogger("Settings").warning(
-        "Unable to decode repository settings at \(path); migrating from global settings."
+        "Unable to decode repository settings at \(path); falling back to global settings."
       )
     }
 
     @Shared(.settingsFile) var settingsFile: SettingsFile
-    let migratedSettings = $settingsFile.withLock { settings in
-      settings.repositories[repositoryID] ?? (context.initialValue ?? .default)
+    let settings = $settingsFile.withLock { settings in
+      if let existing = settings.repositories[repositoryID] {
+        return existing
+      }
+      let defaults = context.initialValue ?? .default
+      settings.repositories[repositoryID] = defaults
+      return defaults
     }
-    do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      let data = try encoder.encode(migratedSettings)
-      try repositoryLocalSettingsStorage.save(data, repositorySettingsURL)
-    } catch {
-      let path = repositorySettingsURL.path(percentEncoded: false)
-      SupaLogger("Settings").warning(
-        "Unable to write migrated repository settings to \(path): \(error.localizedDescription)"
-      )
-    }
-    continuation.resume(returning: migratedSettings)
+    continuation.resume(returning: settings)
   }
 
   func subscribe(
@@ -69,15 +63,24 @@ nonisolated struct RepositorySettingsKey: SharedKey {
   ) {
     @Dependency(\.repositoryLocalSettingsStorage) var repositoryLocalSettingsStorage
     let repositorySettingsURL = SupacodePaths.repositorySettingsURL(for: rootURL)
-    do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      let data = try encoder.encode(value)
-      try repositoryLocalSettingsStorage.save(data, repositorySettingsURL)
-      continuation.resume()
-    } catch {
-      continuation.resume(throwing: error)
+    if (try? repositoryLocalSettingsStorage.load(repositorySettingsURL)) != nil {
+      do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(value)
+        try repositoryLocalSettingsStorage.save(data, repositorySettingsURL)
+        continuation.resume()
+      } catch {
+        continuation.resume(throwing: error)
+      }
+      return
     }
+
+    @Shared(.settingsFile) var settingsFile: SettingsFile
+    $settingsFile.withLock {
+      $0.repositories[repositoryID] = value
+    }
+    continuation.resume()
   }
 }
 
