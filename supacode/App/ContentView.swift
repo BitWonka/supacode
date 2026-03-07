@@ -164,7 +164,7 @@ private struct RunScriptPromptView: View {
           text: $script,
           isMonospaced: true
         )
-          .frame(minHeight: 160)
+        .frame(minHeight: 160)
         if script.isEmpty {
           Text("npm run dev")
             .foregroundStyle(.secondary)
