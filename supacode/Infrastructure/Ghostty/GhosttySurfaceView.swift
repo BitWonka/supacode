@@ -312,6 +312,11 @@ final class GhosttySurfaceView: NSView, Identifiable {
 
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
+    if window == nil {
+      // SwiftUI can temporarily detach a pane while rebuilding split/zoom layout.
+      // If we keep the stale local focus bit, detached panes still intercept bindings.
+      focusDidChange(false)
+    }
     updateScreenObservers()
     updateContentScale()
     updateSurfaceSize()

@@ -436,6 +436,7 @@ final class WorktreeTerminalState {
       guard tree.isSplit else { return false }
       let newZoomed = (tree.zoomed == targetNode) ? nil : targetNode
       updateTree(tree.settingZoomed(newZoomed), for: tabId)
+      focusSurface(targetSurface, in: tabId)
       return true
     }
   }
