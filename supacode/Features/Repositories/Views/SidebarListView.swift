@@ -4,6 +4,8 @@ import SwiftUI
 struct SidebarListView: View {
   @Bindable var store: StoreOf<RepositoriesFeature>
   let terminalManager: WorktreeTerminalManager
+  @FocusState private var isSidebarFocused: Bool
+
   var body: some View {
     let state = store.state
     let expandedRepoIDs = state.expandedRepositoryIDs
@@ -19,26 +21,12 @@ struct SidebarListView: View {
       }
     )
     let repositoriesByID = Dictionary(uniqueKeysWithValues: store.repositories.map { ($0.id, $0) })
-    List(selection: selection) {
-      if orderedRoots.isEmpty {
-        ForEach(store.repositories) { repository in
-          SidebarRepositorySectionView(
-            repository: repository,
-            hotkeyRows: hotkeyRows,
-            selectedWorktreeIDs: selectedWorktreeIDs,
-            store: store,
-            terminalManager: terminalManager
-          )
-        }
-      } else {
-        ForEach(sidebarRootRows(from: orderedRoots), id: \.repositoryID) { row in
-          if let failureMessage = state.loadFailuresByID[row.repositoryID] {
-            SidebarFailedRepositoryRow(
-              rootURL: row.rootURL,
-              failureMessage: failureMessage,
-              store: store
-            )
-          } else if let repository = repositoriesByID[row.repositoryID] {
+    let pendingSidebarReveal = state.pendingSidebarReveal
+
+    return ScrollViewReader { scrollProxy in
+      List(selection: selection) {
+        if orderedRoots.isEmpty {
+          ForEach(store.repositories) { repository in
             SidebarRepositorySectionView(
               repository: repository,
               hotkeyRows: hotkeyRows,
@@ -47,42 +35,63 @@ struct SidebarListView: View {
               terminalManager: terminalManager
             )
           }
-        }
-        .onMove { offsets, destination in
-          store.send(.repositoriesMoved(offsets, destination))
+        } else {
+          ForEach(sidebarRootRows(from: orderedRoots), id: \.repositoryID) { row in
+            if let failureMessage = state.loadFailuresByID[row.repositoryID] {
+              SidebarFailedRepositoryRow(
+                rootURL: row.rootURL,
+                failureMessage: failureMessage,
+                store: store
+              )
+            } else if let repository = repositoriesByID[row.repositoryID] {
+              SidebarRepositorySectionView(
+                repository: repository,
+                hotkeyRows: hotkeyRows,
+                selectedWorktreeIDs: selectedWorktreeIDs,
+                store: store,
+                terminalManager: terminalManager
+              )
+            }
+          }
+          .onMove { offsets, destination in
+            store.send(.repositoriesMoved(offsets, destination))
+          }
         }
       }
-    }
-    .listStyle(.sidebar)
-    .scrollIndicators(.never)
-    .frame(minWidth: 220)
-    .dropDestination(for: URL.self) { urls, _ in
-      let fileURLs = urls.filter(\.isFileURL)
-      guard !fileURLs.isEmpty else { return false }
-      store.send(.openRepositories(fileURLs))
-      return true
-    }
-    .onKeyPress { keyPress in
-      guard !keyPress.characters.isEmpty else { return .ignored }
-      let isNavigationKey =
-        keyPress.key == .upArrow
-        || keyPress.key == .downArrow
-        || keyPress.key == .leftArrow
-        || keyPress.key == .rightArrow
-        || keyPress.key == .home
-        || keyPress.key == .end
-        || keyPress.key == .pageUp
-        || keyPress.key == .pageDown
-      if isNavigationKey { return .ignored }
-      let hasCommandModifier = keyPress.modifiers.contains(.command)
-      if hasCommandModifier { return .ignored }
-      guard let worktreeID = store.selectedWorktreeID,
-        state.sidebarSelectedWorktreeIDs.count == 1,
-        state.sidebarSelectedWorktreeIDs.contains(worktreeID),
-        let terminalState = terminalManager.stateIfExists(for: worktreeID)
-      else { return .ignored }
-      terminalState.focusAndInsertText(keyPress.characters)
-      return .handled
+      .listStyle(.sidebar)
+      .focused($isSidebarFocused)
+      .frame(minWidth: 220)
+      .dropDestination(for: URL.self) { urls, _ in
+        let fileURLs = urls.filter(\.isFileURL)
+        guard !fileURLs.isEmpty else { return false }
+        store.send(.openRepositories(fileURLs))
+        return true
+      }
+      .onKeyPress { keyPress in
+        guard !keyPress.characters.isEmpty else { return .ignored }
+        let isNavigationKey =
+          keyPress.key == .upArrow
+          || keyPress.key == .downArrow
+          || keyPress.key == .leftArrow
+          || keyPress.key == .rightArrow
+          || keyPress.key == .home
+          || keyPress.key == .end
+          || keyPress.key == .pageUp
+          || keyPress.key == .pageDown
+        if isNavigationKey { return .ignored }
+        let hasCommandModifier = keyPress.modifiers.contains(.command)
+        if hasCommandModifier { return .ignored }
+        guard let worktreeID = store.selectedWorktreeID,
+          state.sidebarSelectedWorktreeIDs.count == 1,
+          state.sidebarSelectedWorktreeIDs.contains(worktreeID),
+          let terminalState = terminalManager.stateIfExists(for: worktreeID)
+        else { return .ignored }
+        terminalState.focusAndInsertText(keyPress.characters)
+        return .handled
+      }
+      .task(id: pendingSidebarReveal?.id) {
+        await revealPendingSidebarWorktree(pendingSidebarReveal, with: scrollProxy)
+      }
     }
   }
 
@@ -95,6 +104,22 @@ struct SidebarListView: View {
         repositoryID: rootURL.standardizedFileURL.path(percentEncoded: false)
       )
     }
+  }
+
+  @MainActor
+  private func revealPendingSidebarWorktree(
+    _ pendingSidebarReveal: RepositoriesFeature.PendingSidebarReveal?,
+    with scrollProxy: ScrollViewProxy
+  ) async {
+    guard let pendingSidebarReveal else { return }
+    // Give SwiftUI time to materialize newly expanded section rows before scrolling.
+    await Task.yield()
+    await Task.yield()
+    isSidebarFocused = true
+    withAnimation(.easeOut(duration: 0.2)) {
+      scrollProxy.scrollTo(pendingSidebarReveal.worktreeID, anchor: .center)
+    }
+    store.send(.consumePendingSidebarReveal(pendingSidebarReveal.id))
   }
 }
 

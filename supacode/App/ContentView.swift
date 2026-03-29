@@ -88,6 +88,7 @@ struct ContentView: View {
       )
     }
     .focusedSceneValue(\.toggleLeftSidebarAction, toggleLeftSidebar)
+    .focusedSceneValue(\.revealInSidebarAction, revealInSidebarAction)
     .overlay {
       CommandPaletteOverlayView(
         store: store.scope(state: \.commandPalette, action: \.commandPalette),
@@ -104,6 +105,18 @@ struct ContentView: View {
     withAnimation(.easeOut(duration: 0.2)) {
       leftSidebarVisibility = leftSidebarVisibility == .detailOnly ? .all : .detailOnly
     }
+  }
+
+  private var revealInSidebarAction: (() -> Void)? {
+    guard store.repositories.selectedWorktreeID != nil else { return nil }
+    return { revealInSidebar() }
+  }
+
+  private func revealInSidebar() {
+    withAnimation(.easeOut(duration: 0.2)) {
+      leftSidebarVisibility = .all
+    }
+    store.send(.repositories(.revealSelectedWorktreeInSidebar))
   }
 
 }

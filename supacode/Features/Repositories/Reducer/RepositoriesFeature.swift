@@ -57,6 +57,11 @@ nonisolated struct WorktreeCreationProgressUpdateThrottle {
 
 @Reducer
 struct RepositoriesFeature {
+  struct PendingSidebarReveal: Equatable {
+    let id: Int
+    let worktreeID: Worktree.ID
+  }
+
   @ObservableState
   struct State: Equatable {
     var repositories: IdentifiedArrayOf<Repository> = []
@@ -90,6 +95,8 @@ struct RepositoriesFeature {
     var inFlightPullRequestRefreshRepositoryIDs: Set<Repository.ID> = []
     var queuedPullRequestRefreshByRepositoryID: [Repository.ID: PendingPullRequestRefresh] = [:]
     var sidebarSelectedWorktreeIDs: Set<Worktree.ID> = []
+    var nextPendingSidebarRevealID = 0
+    var pendingSidebarReveal: PendingSidebarReveal?
     @Shared(.appStorage("sidebarCollapsedRepositoryIDs")) var collapsedRepositoryIDs: [Repository.ID] = []
     @Presents var worktreeCreationPrompt: WorktreeCreationPromptFeature.State?
     @Presents var alert: AlertState<Alert>?
@@ -144,6 +151,8 @@ struct RepositoriesFeature {
     case selectWorktree(Worktree.ID?, focusTerminal: Bool = false)
     case selectNextWorktree
     case selectPreviousWorktree
+    case revealSelectedWorktreeInSidebar
+    case consumePendingSidebarReveal(Int)
     case requestRenameBranch(Worktree.ID, String)
     case createRandomWorktree
     case createRandomWorktreeInRepository(Repository.ID)
@@ -590,6 +599,22 @@ struct RepositoriesFeature {
       case .selectPreviousWorktree:
         guard let id = state.worktreeID(byOffset: -1) else { return .none }
         return .send(.selectWorktree(id))
+
+      case .revealSelectedWorktreeInSidebar:
+        guard let worktreeID = state.selectedWorktreeID,
+          let repositoryID = state.repositoryID(containing: worktreeID)
+        else { return .none }
+        state.$collapsedRepositoryIDs.withLock {
+          $0.removeAll { $0 == repositoryID }
+        }
+        state.nextPendingSidebarRevealID += 1
+        state.pendingSidebarReveal = .init(id: state.nextPendingSidebarRevealID, worktreeID: worktreeID)
+        return .none
+
+      case .consumePendingSidebarReveal(let pendingSidebarRevealID):
+        guard state.pendingSidebarReveal?.id == pendingSidebarRevealID else { return .none }
+        state.pendingSidebarReveal = nil
+        return .none
 
       case .requestRenameBranch(let worktreeID, let branchName):
         guard let worktree = state.worktree(for: worktreeID) else { return .none }

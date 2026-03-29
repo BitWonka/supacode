@@ -176,6 +176,7 @@ private struct WorktreeRowContainer: View {
       }
     }
     .tag(SidebarSelection.worktree(row.id))
+    .id(row.id)
     .typeSelectEquivalent("")
     .moveDisabled(moveDisabled)
     .contextMenu {
