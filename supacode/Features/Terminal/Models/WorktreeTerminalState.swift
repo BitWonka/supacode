@@ -25,6 +25,7 @@ final class WorktreeTerminalState {
   private var focusedSurfaceIdByTab: [TerminalTabID: UUID] = [:]
   var tabIsRunningById: [TerminalTabID: Bool] = [:]
   private var blockingScripts: [TerminalTabID: BlockingScriptKind] = [:]
+  private var blockingScriptLaunchDirectories: [TerminalTabID: URL] = [:]
   private var blockingScriptCommandFinished: Set<TerminalTabID> = []
   private var blockingScriptLastCommandExitCode: [TerminalTabID: Int] = [:]
   private var lastBlockingScriptTabByKind: [BlockingScriptKind: TerminalTabID] = [:]
@@ -145,7 +146,15 @@ final class WorktreeTerminalState {
 
   @discardableResult
   func runBlockingScript(kind: BlockingScriptKind, _ script: String) -> TerminalTabID? {
-    guard let input = blockingScriptInput(script) else { return nil }
+    let launch: BlockingScriptLaunch
+    do {
+      guard let prepared = try blockingScriptLaunch(script) else { return nil }
+      launch = prepared
+    } catch {
+      blockingScriptLogger.warning("Failed to prepare \(kind.tabTitle) for worktree \(worktree.id): \(error)")
+      onBlockingScriptCompleted?(kind, nil)
+      return nil
+    }
     // Close any previous tab of the same kind (active or lingering
     // from a completed/cancelled run). Clear tracking state first
     // so closeTab doesn't fire a premature completion callback.
@@ -164,18 +173,20 @@ final class WorktreeTerminalState {
         icon: kind.tabIcon,
         isTitleLocked: true,
         tintColor: kind.tabColor,
-        initialInput: input,
+        initialInput: launch.commandInput,
         focusing: true,
         inheritingFromSurfaceId: currentFocusedSurfaceId(),
         context: GHOSTTY_SURFACE_CONTEXT_TAB
       )
     )
     guard let tabId else {
+      cleanupBlockingScriptLaunchDirectory(at: launch.directoryURL)
       blockingScriptLogger.warning("Failed to create \(kind.tabTitle) tab for worktree \(worktree.id)")
       onBlockingScriptCompleted?(kind, nil)
       return nil
     }
     blockingScripts[tabId] = kind
+    blockingScriptLaunchDirectories[tabId] = launch.directoryURL
     lastBlockingScriptTabByKind[kind] = tabId
 
     blockingScriptLogger.info("Started \(kind.tabTitle) for worktree \(worktree.id)")
@@ -338,6 +349,7 @@ final class WorktreeTerminalState {
 
   func closeTab(_ tabId: TerminalTabID) {
     let closedBlockingKind = blockingScripts.removeValue(forKey: tabId)
+    cleanupBlockingScriptLaunchDirectory(for: tabId)
     // Clear lingering tab tracking for completed or non-blocking tabs.
     for (kind, tracked) in lastBlockingScriptTabByKind where tracked == tabId {
       lastBlockingScriptTabByKind.removeValue(forKey: kind)
@@ -522,6 +534,7 @@ final class WorktreeTerminalState {
     for surface in surfaces.values {
       surface.closeSurface()
     }
+    cleanupBlockingScriptLaunchDirectories()
     surfaces.removeAll()
     trees.removeAll()
     focusedSurfaceIdByTab.removeAll()
@@ -596,18 +609,44 @@ final class WorktreeTerminalState {
   }
 
   private func formatCommandInput(_ script: String) -> String? {
-    let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return nil }
-    return worktree.scriptEnvironmentExportPrefix + trimmed + "\n"
+    makeCommandInput(
+      script: script,
+      environmentExportPrefix: worktree.scriptEnvironmentExportPrefix
+    )
   }
 
-  // Appends `exit $?` so the shell terminates with the script's exit code.
-  // Without this, the interactive shell stays alive after the script finishes
-  // and GHOSTTY_ACTION_SHOW_CHILD_EXITED never fires for completion detection.
-  private func blockingScriptInput(_ script: String) -> String? {
-    let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return nil }
-    return worktree.scriptEnvironmentExportPrefix + "(\n" + trimmed + "\n)\nexit $?\n"
+  private func cleanupBlockingScriptLaunchDirectory(for tabId: TerminalTabID) {
+    guard let directoryURL = blockingScriptLaunchDirectories.removeValue(forKey: tabId) else { return }
+    cleanupBlockingScriptLaunchDirectory(at: directoryURL)
+  }
+
+  private func cleanupBlockingScriptLaunchDirectories() {
+    let directoryURLs = blockingScriptLaunchDirectories.values
+    blockingScriptLaunchDirectories.removeAll()
+    for directoryURL in directoryURLs {
+      cleanupBlockingScriptLaunchDirectory(at: directoryURL)
+    }
+  }
+
+  private func cleanupBlockingScriptLaunchDirectory(at directoryURL: URL) {
+    do {
+      try FileManager.default.removeItem(at: directoryURL)
+    } catch {
+      blockingScriptLogger.warning(
+        "Failed to remove blocking script launch directory \(directoryURL.path(percentEncoded: false)): \(error)"
+      )
+    }
+  }
+
+  // The typed command stays shell-portable by invoking a generated wrapper file,
+  // which reads env/script metadata from sibling files rather than serializing
+  // the user script into a shell-escaped `-c` string.
+  private func blockingScriptLaunch(_ script: String) throws -> BlockingScriptLaunch? {
+    try makeBlockingScriptLaunch(
+      script: script,
+      environment: worktree.scriptEnvironment,
+      shellPath: defaultShellPath()
+    )
   }
 
   // Detects signal-based termination (e.g. Ctrl+C = exit code 130)
@@ -976,6 +1015,7 @@ final class WorktreeTerminalState {
     if newTree.isEmpty {
       trees.removeValue(forKey: tabId)
       focusedSurfaceIdByTab.removeValue(forKey: tabId)
+      cleanupBlockingScriptLaunchDirectory(for: tabId)
       tabManager.closeTab(tabId)
       if let kind = blockingScripts.removeValue(forKey: tabId) {
         blockingScriptCommandFinished.remove(tabId)
@@ -1055,4 +1095,108 @@ final class WorktreeTerminalState {
     }
     return maxIndex + 1
   }
+}
+
+nonisolated func makeCommandInput(
+  script: String,
+  environmentExportPrefix: String
+) -> String? {
+  let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard !trimmed.isEmpty else { return nil }
+  return environmentExportPrefix + trimmed + "\n"
+}
+
+nonisolated struct BlockingScriptLaunch {
+  let directoryURL: URL
+  let runnerURL: URL
+  let scriptURL: URL
+  let rootPathURL: URL
+  let worktreePathURL: URL
+  let shellPathURL: URL
+  let commandInput: String
+}
+
+nonisolated func makeBlockingScriptLaunch(
+  script: String,
+  environment: [String: String],
+  shellPath: String,
+  baseDirectoryURL: URL = FileManager.default.temporaryDirectory
+) throws -> BlockingScriptLaunch? {
+  let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard !trimmed.isEmpty,
+    let rootPath = environment["SUPACODE_ROOT_PATH"],
+    let worktreePath = environment["SUPACODE_WORKTREE_PATH"]
+  else {
+    return nil
+  }
+
+  let fileManager = FileManager.default
+  let directoryURL = baseDirectoryURL.appending(
+    path: "supacode-blocking-script-\(UUID().uuidString.lowercased())",
+    directoryHint: .isDirectory
+  )
+  let runnerURL = directoryURL.appending(path: "run", directoryHint: .notDirectory)
+  let scriptURL = directoryURL.appending(path: "script", directoryHint: .notDirectory)
+  let rootPathURL = directoryURL.appending(path: "root-path", directoryHint: .notDirectory)
+  let worktreePathURL = directoryURL.appending(path: "worktree-path", directoryHint: .notDirectory)
+  let shellPathURL = directoryURL.appending(path: "shell-path", directoryHint: .notDirectory)
+
+  do {
+    try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+    try Data((trimmed + "\n").utf8).write(to: scriptURL, options: [.atomic])
+    try Data((rootPath + "\n").utf8).write(to: rootPathURL, options: [.atomic])
+    try Data((worktreePath + "\n").utf8).write(to: worktreePathURL, options: [.atomic])
+    try Data((shellPath + "\n").utf8).write(to: shellPathURL, options: [.atomic])
+    try Data(
+      blockingScriptRunnerContents(
+        scriptURL: scriptURL,
+        rootPathURL: rootPathURL,
+        worktreePathURL: worktreePathURL,
+        shellPathURL: shellPathURL
+      ).utf8
+    ).write(to: runnerURL, options: [.atomic])
+    try fileManager.setAttributes(
+      [.posixPermissions: 0o700],
+      ofItemAtPath: runnerURL.path(percentEncoded: false)
+    )
+  } catch {
+    try? fileManager.removeItem(at: directoryURL)
+    throw error
+  }
+
+  return BlockingScriptLaunch(
+    directoryURL: directoryURL,
+    runnerURL: runnerURL,
+    scriptURL: scriptURL,
+    rootPathURL: rootPathURL,
+    worktreePathURL: worktreePathURL,
+    shellPathURL: shellPathURL,
+    commandInput: shellSingleQuoted(runnerURL.path(percentEncoded: false)) + "\nexit\n"
+  )
+}
+
+nonisolated func blockingScriptRunnerContents(
+  scriptURL: URL,
+  rootPathURL: URL,
+  worktreePathURL: URL,
+  shellPathURL: URL
+) -> String {
+  let quotedRootPath = shellSingleQuoted(rootPathURL.path(percentEncoded: false))
+  let quotedWorktreePath = shellSingleQuoted(worktreePathURL.path(percentEncoded: false))
+  let quotedShellPath = shellSingleQuoted(shellPathURL.path(percentEncoded: false))
+  let quotedScriptPath = shellSingleQuoted(scriptURL.path(percentEncoded: false))
+
+  return """
+    #!/bin/sh
+    set -eu
+    IFS= read -r SUPACODE_ROOT_PATH < \(quotedRootPath)
+    IFS= read -r SUPACODE_WORKTREE_PATH < \(quotedWorktreePath)
+    IFS= read -r SUPACODE_SHELL_PATH < \(quotedShellPath)
+    export SUPACODE_ROOT_PATH SUPACODE_WORKTREE_PATH
+    exec "$SUPACODE_SHELL_PATH" -l \(quotedScriptPath)
+    """
+}
+
+nonisolated func shellSingleQuoted(_ value: String) -> String {
+  "'\(value.replacing("'", with: "'\"'\"'"))'"
 }

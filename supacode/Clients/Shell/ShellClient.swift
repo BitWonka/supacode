@@ -261,7 +261,7 @@ nonisolated private func shellExecCommand(for shellURL: URL) -> String {
   }
 }
 
-nonisolated private func defaultShellPath() -> String {
+nonisolated func defaultShellPath() -> String {
   if let env = ProcessInfo.processInfo.environment["SHELL"], !env.isEmpty {
     shellLogger.info("Using SHELL env: \(env)")
     return env
