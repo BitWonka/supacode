@@ -73,7 +73,6 @@ struct AppFeature {
   @Dependency(AnalyticsClient.self) private var analyticsClient
   @Dependency(RepositoryPersistenceClient.self) private var repositoryPersistence
   @Dependency(WorkspaceClient.self) private var workspaceClient
-  @Dependency(SettingsWindowClient.self) private var settingsWindowClient
   @Dependency(NotificationSoundClient.self) private var notificationSoundClient
   @Dependency(SystemNotificationClient.self) private var systemNotificationClient
   @Dependency(TerminalClient.self) private var terminalClient
@@ -196,6 +195,7 @@ struct AppFeature {
           !repositories.contains(where: { $0.id == repositoryID })
         {
           return .merge(
+            .send(.settings(.repositoriesChanged(repositories))),
             .send(.settings(.setSelection(.general))),
             .send(.commandPalette(.pruneRecency(recencyIDs))),
             .run { _ in
@@ -207,6 +207,7 @@ struct AppFeature {
           )
         }
         return .merge(
+          .send(.settings(.repositoriesChanged(repositories))),
           .send(.commandPalette(.pruneRecency(recencyIDs))),
           .run { _ in
             await terminalClient.send(.prune(ids))
@@ -220,13 +221,7 @@ struct AppFeature {
         guard state.repositories.repositories.contains(where: { $0.id == repositoryID }) else {
           return .none
         }
-        let selection = SettingsSection.repository(repositoryID)
-        return .merge(
-          .send(.settings(.setSelection(selection))),
-          .run { _ in
-            await settingsWindowClient.show()
-          }
-        )
+        return .send(.settings(.setSelection(.repository(repositoryID))))
 
       case .repositories(.delegate(.runBlockingScript(let worktree, _, let kind, let script))):
         return .run { _ in
@@ -246,7 +241,7 @@ struct AppFeature {
             rootURL: repository.rootURL,
             settings: repositorySettings
           )
-        case .general, .notifications, .worktree, .shortcuts, .updates, .advanced, .github:
+        case .general, .notifications, .worktree, .shortcuts, .updates, .github:
           state.settings.repositorySettings = nil
         }
         return .none
@@ -581,12 +576,7 @@ struct AppFeature {
         return .send(.updates(.checkForUpdates))
 
       case .commandPalette(.delegate(.openSettings)):
-        return .merge(
-          .send(.settings(.setSelection(.general))),
-          .run { _ in
-            await settingsWindowClient.show()
-          }
-        )
+        return .send(.settings(.setSelection(.general)))
 
       case .commandPalette(.delegate(.newWorktree)):
         return .send(.repositories(.createRandomWorktree))

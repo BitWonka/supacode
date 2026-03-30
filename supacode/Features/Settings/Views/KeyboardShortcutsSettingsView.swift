@@ -106,7 +106,9 @@ struct KeyboardShortcutsSettingsView: View {
       }
     }
     .alternatingRowBackgrounds()
+    .padding(.leading, -6)
     .searchable(text: $searchText, placement: .toolbar, prompt: "Search...")
+    .navigationTitle("Shortcuts")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Button {
@@ -128,60 +130,6 @@ struct KeyboardShortcutsSettingsView: View {
         }
       }
     }
-    // Align window toolbar and first column text.
-    .padding(.leading, -6)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .overlay(alignment: .top) {
-      // Liquid Glass removes the toolbar separator in windowed mode and `NSTitlebarSeparatorStyle`
-      // has no effect, so we draw a manual divider when not in fullscreen.
-      ToolbarSeparatorOverlay()
-    }
-  }
-}
-
-// MARK: - Toolbar separator.
-
-private struct ToolbarSeparatorOverlay: NSViewRepresentable {
-  func makeNSView(context: Context) -> ToolbarSeparatorView { ToolbarSeparatorView() }
-  func updateNSView(_ nsView: ToolbarSeparatorView, context: Context) {}
-}
-
-// Observes fullscreen transitions and hides the separator when the system already provides one.
-private final class ToolbarSeparatorView: NSView {
-  private let separator = NSBox()
-
-  override var acceptsFirstResponder: Bool { false }
-  override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-  override init(frame: NSRect) {
-    super.init(frame: frame)
-    separator.boxType = .separator
-    addSubview(separator)
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError() }
-
-  override func layout() {
-    super.layout()
-    separator.frame = CGRect(x: 0, y: bounds.maxY, width: bounds.width, height: 1)
-  }
-
-  override func viewDidMoveToWindow() {
-    super.viewDidMoveToWindow()
-    updateVisibility()
-    NotificationCenter.default.addObserver(
-      self, selector: #selector(updateVisibility), name: NSWindow.didEnterFullScreenNotification, object: window)
-    NotificationCenter.default.addObserver(
-      self, selector: #selector(updateVisibility), name: NSWindow.didExitFullScreenNotification, object: window)
-  }
-
-  deinit {
-    NotificationCenter.default.removeObserver(self)
-  }
-
-  @objc private func updateVisibility() {
-    separator.isHidden = window?.styleMask.contains(.fullScreen) == true
   }
 }
 

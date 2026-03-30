@@ -57,10 +57,10 @@ final class SupacodeAppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func mainWindow(from sender: NSApplication) -> NSWindow? {
-    if let window = sender.windows.first(where: { $0.identifier?.rawValue == "main" }) {
+    if let window = sender.windows.first(where: { $0.identifier?.rawValue == WindowID.main }) {
       return window
     }
-    if let window = sender.windows.first(where: { $0.identifier?.rawValue != "settings" }) {
+    if let window = sender.windows.first(where: { $0.identifier?.rawValue != WindowID.settings }) {
       return window
     }
     return sender.windows.first
@@ -157,21 +157,16 @@ struct SupacodeApp: App {
     }
     _store = State(initialValue: appStore)
     appDelegate.appStore = appStore
-    SettingsWindowManager.shared.configure(
-      store: appStore,
-      ghosttyShortcuts: shortcuts,
-      commandKeyObserver: keyObserver
-    )
   }
 
   var body: some Scene {
-    Window("Supacode", id: "main") {
+    Window("Supacode", id: WindowID.main) {
       GhosttyColorSchemeSyncView(ghostty: ghostty) {
         ContentView(store: store, terminalManager: terminalManager)
           .environment(ghosttyShortcuts)
           .environment(commandKeyObserver)
       }
-      .preferredColorScheme(store.settings.appearanceMode.colorScheme)
+      .openSettingsOnSelection(store: store)
     }
     .environment(ghosttyShortcuts)
     .environment(commandKeyObserver)
@@ -189,32 +184,23 @@ struct SupacodeApp: App {
         .help("Command Palette (\(cmdPalette?.display ?? "none"))")
       }
       UpdateCommands(store: store.scope(state: \.updates, action: \.updates))
-      CommandGroup(replacing: .windowArrangement) {
-        Button("Supacode") {
-          if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+      Group {
+        CommandGroup(replacing: .windowList) {}
+        CommandGroup(replacing: .singleWindowList) {
+          Button("Supacode") {
+            if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == WindowID.main }) {
+              window.makeKeyAndOrderFront(nil)
+              NSApp.activate(ignoringOtherApps: true)
+            }
           }
+          .keyboardShortcut("0")
+          .help("Show main window (⌘0)")
         }
-        .keyboardShortcut("0")
-        .help("Show main window (⌘0)")
-        Divider()
-        Button("Minimize") {
-          NSApp.keyWindow?.miniaturize(nil)
-        }
-        .keyboardShortcut("m")
-        .help("Minimize (⌘M)")
-        Button("Zoom") {
-          NSApp.keyWindow?.zoom(nil)
-        }
-        .help("Zoom (no shortcut)")
       }
       CommandGroup(replacing: .appSettings) {
-        let settings = AppShortcuts.openSettings.effective(from: store.settings.shortcutOverrides)
-        Button("Settings...") {
-          SettingsWindowManager.shared.show()
+        SettingsMenuButton(shortcutOverrides: store.settings.shortcutOverrides) {
+          store.send(.settings(.setSelection(.general)))
         }
-        .appKeyboardShortcut(settings)
       }
       CommandGroup(replacing: .help) {
         Button("Submit GitHub Issue") {
@@ -231,5 +217,15 @@ struct SupacodeApp: App {
         .help("Quit Supacode (⌘Q)")
       }
     }
+    Window("Settings", id: WindowID.settings) {
+      SettingsView(store: store)
+        .environment(ghosttyShortcuts)
+        .environment(commandKeyObserver)
+        .toolbarBackground(.hidden, for: .windowToolbar)
+        .toolbarColorScheme(store.settings.appearanceMode.colorScheme, for: .windowToolbar)
+    }
+    .windowToolbarStyle(.unified)
+    .defaultSize(width: 800, height: 600)
+    .restorationBehavior(.disabled)
   }
 }

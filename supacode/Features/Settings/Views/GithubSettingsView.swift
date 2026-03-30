@@ -54,99 +54,104 @@ struct GithubSettingsView: View {
   @State private var viewModel = GithubSettingsViewModel()
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      Form {
-        Section("GitHub integration") {
-          Toggle(
-            "Enable GitHub integration",
-            isOn: $store.githubIntegrationEnabled
-          )
-          .help("Enable GitHub integration")
+    Form {
+      Section {
+        Toggle(isOn: $store.githubIntegrationEnabled) {
+          Text("Enable GitHub Integration")
+          Text("Pull request checks and merge actions in the command palette.")
         }
-        Section("GitHub CLI") {
-          switch viewModel.state {
-          case .loading:
-            HStack(spacing: 8) {
-              ProgressView()
-                .controlSize(.small)
-              Text("Checking GitHub CLI...")
-                .foregroundStyle(.secondary)
-            }
+      }
+      Section("GitHub CLI") {
+        switch viewModel.state {
+        case .loading:
+          LabeledContent("Checking GitHub CLI…") {
+            ProgressView().controlSize(.small)
+          }
 
-          case .unavailable:
-            VStack(alignment: .leading, spacing: 8) {
-              Label("GitHub integration unavailable", systemImage: "xmark.circle")
-                .foregroundStyle(.red)
-              Text("Enable GitHub integration and install gh CLI to use pull request checks.")
+        case .unavailable:
+          Label {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("GitHub CLI not found")
+              Text("Install `gh` to enable pull request checks.")
                 .foregroundStyle(.secondary)
                 .font(.callout)
             }
+          } icon: {
+            Image(systemName: "xmark.circle")
+              .foregroundStyle(.red)
+              .accessibilityHidden(true)
+          }
 
-          case .notAuthenticated:
-            VStack(alignment: .leading, spacing: 8) {
-              Label("Not authenticated", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-              Text("Run `gh auth login` in terminal to authenticate.")
+        case .notAuthenticated:
+          Label {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Not authenticated")
+              Text("Run `gh auth login` in a terminal to authenticate.")
                 .foregroundStyle(.secondary)
                 .font(.callout)
             }
+          } icon: {
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.orange)
+              .accessibilityHidden(true)
+          }
 
-          case .outdated:
-            VStack(alignment: .leading, spacing: 8) {
-              Label("GitHub CLI outdated", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-              Text("Update GitHub CLI to the latest version to use GitHub integration.")
+        case .outdated:
+          Label {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("GitHub CLI outdated")
+              Text("Update to the latest version for full support.")
                 .foregroundStyle(.secondary)
                 .font(.callout)
             }
+          } icon: {
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.orange)
+              .accessibilityHidden(true)
+          }
 
-          case .authenticated(let username, let host):
-            LabeledContent("Signed in as") {
-              Text(username)
-                .font(.body)
-            }
-            LabeledContent("Host") {
-              Text(host)
-                .font(.body)
-            }
+        case .authenticated(let username, let host):
+          LabeledContent("Signed in as") {
+            Text(username)
+          }
+          LabeledContent("Host") {
+            Text(host)
+          }
 
-          case .error(let message):
-            VStack(alignment: .leading, spacing: 8) {
-              Label("Error checking status", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
+        case .error(let message):
+          Label {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Error checking status")
               Text(message)
                 .foregroundStyle(.secondary)
                 .font(.callout)
             }
+          } icon: {
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.red)
+              .accessibilityHidden(true)
           }
         }
-      }
-      .formStyle(.grouped)
 
-      switch viewModel.state {
-      case .unavailable:
-        HStack {
+        switch viewModel.state {
+        case .unavailable:
           Button("Get GitHub CLI") {
             NSWorkspace.shared.open(URL(string: "https://cli.github.com")!)
           }
-          .help("Open GitHub CLI website")
-          Spacer()
-        }
-        .padding(.top)
-      case .outdated:
-        HStack {
+        case .outdated:
           Button("Update GitHub CLI") {
             NSWorkspace.shared.open(URL(string: "https://cli.github.com")!)
           }
-          .help("Open GitHub CLI website")
-          Spacer()
+        default:
+          EmptyView()
         }
-        .padding(.top)
-      default:
-        EmptyView()
       }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .formStyle(.grouped)
+    .padding(.top, -20)
+    .padding(.leading, -8)
+    .padding(.trailing, -6)
+    .navigationTitle("GitHub")
     .task {
       await viewModel.load()
     }

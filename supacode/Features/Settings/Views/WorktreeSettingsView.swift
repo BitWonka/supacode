@@ -5,59 +5,44 @@ struct WorktreeSettingsView: View {
   @Bindable var store: StoreOf<SettingsFeature>
 
   var body: some View {
-    let exampleRepositoryRoot = FileManager.default.homeDirectoryForCurrentUser
-      .appending(path: "code/my-repo", directoryHint: .isDirectory)
-    let exampleWorktreePath = SupacodePaths.exampleWorktreePath(
-      for: exampleRepositoryRoot,
-      globalDefaultPath: store.defaultWorktreeBaseDirectoryPath,
-      repositoryOverridePath: nil
-    )
-    VStack(alignment: .leading) {
-      Form {
-        Section("Worktree") {
-          VStack(alignment: .leading) {
-            TextField(
-              "Default: current behavior",
-              text: $store.defaultWorktreeBaseDirectoryPath
-            )
-            .textFieldStyle(.roundedBorder)
-            Text("Default directory for new worktrees across repositories. Leave empty to keep current behavior.")
-              .foregroundStyle(.secondary)
-            Text("Example new worktree path: \(exampleWorktreePath)")
-              .foregroundStyle(.secondary)
-              .monospaced()
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          VStack(alignment: .leading) {
-            Toggle(
-              "Also delete local branch when deleting a worktree",
-              isOn: $store.deleteBranchOnDeleteWorktree
-            )
-            .help("Delete the local branch when deleting a worktree")
-            Text("Removes the local branch along with the worktree. Remote branches must be deleted on GitHub.")
-              .foregroundStyle(.secondary)
-            Text("Uncommitted changes will be lost.")
-              .foregroundStyle(.red)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          Toggle(
-            "Automatically archive merged worktrees",
-            isOn: $store.automaticallyArchiveMergedWorktrees
-          )
-          .help("Archive worktrees automatically when their pull requests are merged.")
-          VStack(alignment: .leading) {
-            Toggle(
-              "Prompt for branch name during creation",
-              isOn: $store.promptForWorktreeCreation
-            )
-            .help("Ask for branch name and base ref before creating a worktree.")
-            Text("When enabled, you choose the branch name and where it branches from before creating the worktree.")
-              .foregroundStyle(.secondary)
-          }
+    let defaultPath = SupacodePaths.reposDirectory.path(percentEncoded: false)
+    let resolvedBase =
+      SupacodePaths.normalizedWorktreeBaseDirectoryPath(
+        store.defaultWorktreeBaseDirectoryPath
+      ) ?? defaultPath
+    let examplePath = "\(resolvedBase)*/**/*"
+    Form {
+      Section {
+        Toggle(isOn: $store.promptForWorktreeCreation) {
+          Text("Prompt for branch name on creation")
+          Text("Choose the branch name and base ref before creating the worktree.")
+        }
+        TextField(
+          text: $store.defaultWorktreeBaseDirectoryPath,
+          prompt: Text(defaultPath)
+        ) {
+          Text("Default directory").monospaced(false)
+          Text("Parent path for new worktrees.").monospaced(false)
+        }.monospaced()
+      } footer: {
+        Text("e.g., `\(examplePath)`")
+      }
+      Section("Clean-up") {
+        Toggle(isOn: $store.automaticallyArchiveMergedWorktrees) {
+          Text("Automatically archive merged worktrees")
+          Text("Archives worktrees when their pull requests are merged.")
+        }
+        Toggle(isOn: $store.deleteBranchOnDeleteWorktree) {
+          Text("Delete local branch with worktree")
+          Text("Removes the local branch along with the worktree. Remote branches must be deleted on GitHub.")
+          Text("Uncommitted changes will be lost.").foregroundStyle(.red)
         }
       }
-      .formStyle(.grouped)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .formStyle(.grouped)
+    .padding(.top, -20)
+    .padding(.leading, -8)
+    .padding(.trailing, -6)
+    .navigationTitle("Worktrees")
   }
 }

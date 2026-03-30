@@ -17,7 +17,8 @@ struct RepositorySettingsFeature {
       SupacodePaths.exampleWorktreePath(
         for: rootURL,
         globalDefaultPath: globalDefaultWorktreeBaseDirectoryPath,
-        repositoryOverridePath: settings.worktreeBaseDirectoryPath
+        repositoryOverridePath: settings.worktreeBaseDirectoryPath,
+        branchName: "**/*"
       )
     }
   }

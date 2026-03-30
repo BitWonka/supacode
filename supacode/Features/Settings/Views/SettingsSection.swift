@@ -6,7 +6,6 @@ enum SettingsSection: Hashable {
   case worktree
   case shortcuts
   case updates
-  case advanced
   case github
   case repository(Repository.ID)
 }

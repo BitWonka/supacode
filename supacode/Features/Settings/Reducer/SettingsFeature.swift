@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import IdentifiedCollections
 
 @Reducer
 struct SettingsFeature {
@@ -21,9 +22,13 @@ struct SettingsFeature {
     var deleteBranchOnDeleteWorktree: Bool
     var automaticallyArchiveMergedWorktrees: Bool
     var promptForWorktreeCreation: Bool
+    var terminalThemeSyncEnabled: Bool
     var defaultWorktreeBaseDirectoryPath: String
     var shortcutOverrides: [AppShortcutID: AppShortcutOverride]
-    var selection: SettingsSection? = .general
+    // nil = settings window closed, non-nil = open to this section.
+    // The view layer opens the settings window when this becomes non-nil.
+    var selection: SettingsSection?
+    var sortedRepositoryIDs: [Repository.ID] = []
     var repositorySettings: RepositorySettingsFeature.State?
     @Presents var alert: AlertState<Alert>?
 
@@ -45,6 +50,7 @@ struct SettingsFeature {
       deleteBranchOnDeleteWorktree = settings.deleteBranchOnDeleteWorktree
       automaticallyArchiveMergedWorktrees = settings.automaticallyArchiveMergedWorktrees
       promptForWorktreeCreation = settings.promptForWorktreeCreation
+      terminalThemeSyncEnabled = settings.terminalThemeSyncEnabled
       shortcutOverrides = settings.shortcutOverrides
       defaultWorktreeBaseDirectoryPath =
         SupacodePaths.normalizedWorktreeBaseDirectoryPath(settings.defaultWorktreeBaseDirectoryPath) ?? ""
@@ -68,6 +74,7 @@ struct SettingsFeature {
         deleteBranchOnDeleteWorktree: deleteBranchOnDeleteWorktree,
         automaticallyArchiveMergedWorktrees: automaticallyArchiveMergedWorktrees,
         promptForWorktreeCreation: promptForWorktreeCreation,
+        terminalThemeSyncEnabled: terminalThemeSyncEnabled,
         defaultWorktreeBaseDirectoryPath: SupacodePaths.normalizedWorktreeBaseDirectoryPath(
           defaultWorktreeBaseDirectoryPath
         ),
@@ -79,6 +86,7 @@ struct SettingsFeature {
   enum Action: BindableAction {
     case task
     case settingsLoaded(GlobalSettings)
+    case repositoriesChanged(IdentifiedArrayOf<Repository>)
     case setSelection(SettingsSection?)
     case setSystemNotificationsEnabled(Bool)
     case showNotificationPermissionAlert(errorMessage: String?)
@@ -145,6 +153,7 @@ struct SettingsFeature {
         state.deleteBranchOnDeleteWorktree = normalizedSettings.deleteBranchOnDeleteWorktree
         state.automaticallyArchiveMergedWorktrees = normalizedSettings.automaticallyArchiveMergedWorktrees
         state.promptForWorktreeCreation = normalizedSettings.promptForWorktreeCreation
+        state.terminalThemeSyncEnabled = normalizedSettings.terminalThemeSyncEnabled
         state.shortcutOverrides = normalizedSettings.shortcutOverrides
         state.defaultWorktreeBaseDirectoryPath = normalizedSettings.defaultWorktreeBaseDirectoryPath ?? ""
         state.repositorySettings?.globalDefaultWorktreeBaseDirectoryPath =
@@ -221,8 +230,15 @@ struct SettingsFeature {
         state.shortcutOverrides = [:]
         return persist(state)
 
+      case .repositoriesChanged(let repositories):
+        state.sortedRepositoryIDs =
+          repositories
+          .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+          .map(\.id)
+        return .none
+
       case .setSelection(let selection):
-        state.selection = selection ?? .general
+        state.selection = selection
         return .none
 
       case .alert(.dismiss):

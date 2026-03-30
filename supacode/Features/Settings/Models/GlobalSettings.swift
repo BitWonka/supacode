@@ -16,6 +16,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
   var automaticallyArchiveMergedWorktrees: Bool
   var promptForWorktreeCreation: Bool
   var defaultWorktreeBaseDirectoryPath: String?
+  var terminalThemeSyncEnabled: Bool
   var shortcutOverrides: [AppShortcutID: AppShortcutOverride]
 
   static let `default` = GlobalSettings(
@@ -35,6 +36,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     deleteBranchOnDeleteWorktree: true,
     automaticallyArchiveMergedWorktrees: false,
     promptForWorktreeCreation: true,
+    terminalThemeSyncEnabled: false,
     defaultWorktreeBaseDirectoryPath: nil,
     shortcutOverrides: [:]
   )
@@ -56,6 +58,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     deleteBranchOnDeleteWorktree: Bool,
     automaticallyArchiveMergedWorktrees: Bool,
     promptForWorktreeCreation: Bool,
+    terminalThemeSyncEnabled: Bool = false,
     defaultWorktreeBaseDirectoryPath: String? = nil,
     shortcutOverrides: [AppShortcutID: AppShortcutOverride] = [:]
   ) {
@@ -75,6 +78,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     self.deleteBranchOnDeleteWorktree = deleteBranchOnDeleteWorktree
     self.automaticallyArchiveMergedWorktrees = automaticallyArchiveMergedWorktrees
     self.promptForWorktreeCreation = promptForWorktreeCreation
+    self.terminalThemeSyncEnabled = terminalThemeSyncEnabled
     self.defaultWorktreeBaseDirectoryPath = defaultWorktreeBaseDirectoryPath
     self.shortcutOverrides = shortcutOverrides
   }
@@ -123,6 +127,9 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     promptForWorktreeCreation =
       try container.decodeIfPresent(Bool.self, forKey: .promptForWorktreeCreation)
       ?? Self.default.promptForWorktreeCreation
+    terminalThemeSyncEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .terminalThemeSyncEnabled)
+      ?? Self.default.terminalThemeSyncEnabled
     defaultWorktreeBaseDirectoryPath =
       try container.decodeIfPresent(String.self, forKey: .defaultWorktreeBaseDirectoryPath)
       ?? Self.default.defaultWorktreeBaseDirectoryPath

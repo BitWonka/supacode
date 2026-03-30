@@ -1,14 +1,39 @@
 import ComposableArchitecture
+import Kingfisher
 import SwiftUI
 
-extension View {
-  @ViewBuilder
-  fileprivate func removingSidebarToggle() -> some View {
-    if #available(macOS 14.0, *) {
-      toolbar(removing: .sidebarToggle)
-    } else {
-      self
+/// Sidebar label that shows a GitHub owner avatar next to the repository name.
+private struct RepositoryLabel: View {
+  let name: String
+  let rootURL: URL
+
+  @State private var avatarURL: URL?
+
+  var body: some View {
+    Label {
+      Text(name)
+    } icon: {
+      KFImage(avatarURL)
+        .placeholder {
+          Image(systemName: "folder")
+            .padding(-3)
+            .accessibilityHidden(true)
+        }
+        .resizable()
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .padding(3)
     }
+    .task(id: rootURL) {
+      avatarURL = await Self.ownerAvatarURL(for: rootURL)
+    }
+  }
+
+  private static func ownerAvatarURL(for rootURL: URL) async -> URL? {
+    guard let info = await GitClient().remoteInfo(for: rootURL) else {
+      return nil
+    }
+    return URL(string: "https://github.com/\(info.owner).png?size=64")
   }
 }
 
@@ -27,102 +52,67 @@ struct SettingsView: View {
     let selection = settingsStore.selection ?? .general
 
     NavigationSplitView(columnVisibility: .constant(.all)) {
-      VStack(spacing: 0) {
-        List(selection: $settingsStore.selection.sending(\.setSelection)) {
-          Label("General", systemImage: "gearshape")
-            .tag(SettingsSection.general)
-          Label("Notifications", systemImage: "bell")
-            .tag(SettingsSection.notifications)
-          Label("Worktree", systemImage: "archivebox")
-            .tag(SettingsSection.worktree)
-          Label("Shortcuts", systemImage: "command")
-            .tag(SettingsSection.shortcuts)
-          Label("Updates", systemImage: "arrow.down.circle")
-            .tag(SettingsSection.updates)
-          Label("Advanced", systemImage: "gearshape.2")
-            .tag(SettingsSection.advanced)
-          Label("GitHub", systemImage: "arrow.triangle.branch")
-            .tag(SettingsSection.github)
+      List(selection: $settingsStore.selection.sending(\.setSelection)) {
+        Label("General", systemImage: "gearshape")
+          .tag(SettingsSection.general)
+        Label("Notifications", systemImage: "bell")
+          .tag(SettingsSection.notifications)
+        Label("Worktrees", systemImage: "list.dash")
+          .tag(SettingsSection.worktree)
+        Label("GitHub", image: "github-mark")
+          .tag(SettingsSection.github)
+        Label("Shortcuts", systemImage: "keyboard")
+          .tag(SettingsSection.shortcuts)
+        Label("Updates", systemImage: "arrow.down.circle")
+          .tag(SettingsSection.updates)
 
-          Section("Repositories") {
-            ForEach(repositories) { repository in
-              Text(repository.name)
+        Section("Repositories") {
+          ForEach(settingsStore.sortedRepositoryIDs, id: \.self) { repositoryID in
+            if let repository = repositories[id: repositoryID] {
+              RepositoryLabel(name: repository.name, rootURL: repository.rootURL)
                 .tag(SettingsSection.repository(repository.id))
             }
           }
         }
-        .listStyle(.sidebar)
-        .frame(minWidth: 220, maxHeight: .infinity)
-        .navigationSplitViewColumnWidth(220)
-        .removingSidebarToggle()
       }
+      .listStyle(.sidebar)
+      .frame(minWidth: 220, maxHeight: .infinity)
+      .navigationSplitViewColumnWidth(220)
+      .toolbar(removing: .sidebarToggle)
     } detail: {
       switch selection {
       case .general:
-        SettingsDetailView {
-          AppearanceSettingsView(store: settingsStore)
-            .navigationTitle("General")
-            .navigationSubtitle("Appearance and preferences")
-        }
+        AppearanceSettingsView(store: settingsStore)
       case .notifications:
-        SettingsDetailView {
-          NotificationsSettingsView(store: settingsStore)
-            .navigationTitle("Notifications")
-            .navigationSubtitle("In-app alerts and delivery")
-        }
+        NotificationsSettingsView(store: settingsStore)
       case .worktree:
-        SettingsDetailView {
-          WorktreeSettingsView(store: settingsStore)
-            .navigationTitle("Worktree")
-            .navigationSubtitle("Archive behavior")
-        }
+        WorktreeSettingsView(store: settingsStore)
       case .shortcuts:
         KeyboardShortcutsSettingsView(store: settingsStore)
-          .navigationTitle("Keyboard Shortcuts")
-          .navigationSubtitle("Customize key bindings")
       case .updates:
-        SettingsDetailView {
-          UpdatesSettingsView(settingsStore: settingsStore, updatesStore: updatesStore)
-            .navigationTitle("Updates")
-            .navigationSubtitle("Update preferences")
-        }
-      case .advanced:
-        SettingsDetailView {
-          AdvancedSettingsView(store: settingsStore)
-            .navigationTitle("Advanced")
-            .navigationSubtitle("Analytics and diagnostics")
-        }
+        UpdatesSettingsView(settingsStore: settingsStore, updatesStore: updatesStore)
       case .github:
-        SettingsDetailView {
-          GithubSettingsView(store: settingsStore)
-            .navigationTitle("GitHub")
-            .navigationSubtitle("GitHub CLI integration")
-        }
+        GithubSettingsView(store: settingsStore)
       case .repository(let repositoryID):
         if let repository = repositories[id: repositoryID] {
-          SettingsDetailView {
-            IfLetStore(
-              settingsStore.scope(state: \.repositorySettings, action: \.repositorySettings)
-            ) { repositorySettingsStore in
-              RepositorySettingsView(store: repositorySettingsStore)
-                .id(repository.id)
-                .navigationTitle(repository.name)
-                .navigationSubtitle(repository.rootURL.path(percentEncoded: false))
-            }
+          IfLetStore(
+            settingsStore.scope(state: \.repositorySettings, action: \.repositorySettings)
+          ) { repositorySettingsStore in
+            RepositorySettingsView(store: repositorySettingsStore)
+              .id(repository.id)
+              .navigationTitle(repository.name)
           }
         } else {
-          SettingsDetailView {
-            Text("Repository not found.")
-              .foregroundStyle(.secondary)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .navigationTitle("Repositories")
-          }
+          Text("Repository not found.")
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .navigationTitle("Repositories")
         }
       }
     }
     .toolbar {
-      // Prevent the toolbar from collapsing when switching between
-      // detail views with and without toolbar items (e.g. Shortcuts).
+      // Invisible item keeps the toolbar stable when switching between
+      // detail views with and without toolbar items.
       ToolbarItem(placement: .principal) {
         Color.clear.frame(width: 0, height: 0)
       }
@@ -131,10 +121,12 @@ struct SettingsView: View {
     .alert(store: settingsStore.scope(state: \.$alert, action: \.alert))
     .alert(store: store.scope(state: \.$alert, action: \.alert))
     .frame(minWidth: 750, minHeight: 500)
-    .background {
-      WindowAppearanceSetter(colorScheme: settingsStore.appearanceMode.colorScheme)
-      WindowLevelSetter(level: .normal)
+    .onAppear {
+      guard settingsStore.selection == nil else { return }
+      settingsStore.send(.setSelection(.general))
     }
-    .ignoresSafeArea(.container, edges: .top)
+    .onDisappear {
+      settingsStore.send(.setSelection(nil))
+    }
   }
 }

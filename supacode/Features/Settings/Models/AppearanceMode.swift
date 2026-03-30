@@ -12,11 +12,22 @@ enum AppearanceMode: String, CaseIterable, Identifiable, Codable, Sendable {
   var title: String {
     switch self {
     case .system:
-      return "System"
+      return "Auto"
     case .light:
       return "Light"
     case .dark:
       return "Dark"
+    }
+  }
+
+  var imageName: String {
+    switch self {
+    case .system:
+      return "AppearanceAuto"
+    case .light:
+      return "AppearanceLight"
+    case .dark:
+      return "AppearanceDark"
     }
   }
 
@@ -31,41 +42,8 @@ enum AppearanceMode: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var previewBackground: Color {
-    switch self {
-    case .system:
-      return Color(nsColor: .windowBackgroundColor)
-    case .light:
-      return .white
-    case .dark:
-      return .black
-    }
+  /// Resolves the color scheme, falling back to the system color scheme for `.system`.
+  func resolved(systemColorScheme: ColorScheme) -> ColorScheme {
+    colorScheme ?? systemColorScheme
   }
-
-  var previewPrimary: Color {
-    switch self {
-    case .system:
-      return .primary.opacity(0.2)
-    case .light:
-      return .black.opacity(0.15)
-    case .dark:
-      return .white.opacity(0.2)
-    }
-  }
-
-  var previewSecondary: Color {
-    switch self {
-    case .system:
-      return .primary.opacity(0.12)
-    case .light:
-      return .black.opacity(0.08)
-    case .dark:
-      return .white.opacity(0.12)
-    }
-  }
-
-  var previewAccent: Color {
-    .blue
-  }
-
 }

@@ -27,7 +27,8 @@ struct SettingsFeatureTests {
       githubIntegrationEnabled: true,
       deleteBranchOnDeleteWorktree: false,
       automaticallyArchiveMergedWorktrees: true,
-      promptForWorktreeCreation: true
+      promptForWorktreeCreation: true,
+      terminalThemeSyncEnabled: false,
     )
     @Shared(.settingsFile) var settingsFile
     $settingsFile.withLock { $0.global = loaded }
@@ -54,6 +55,7 @@ struct SettingsFeatureTests {
       $0.deleteBranchOnDeleteWorktree = false
       $0.automaticallyArchiveMergedWorktrees = true
       $0.promptForWorktreeCreation = true
+      $0.terminalThemeSyncEnabled = false
     }
     await store.receive(\.delegate.settingsChanged)
   }
@@ -139,6 +141,18 @@ struct SettingsFeatureTests {
 
     await store.send(.setSelection(.general)) {
       $0.selection = .general
+    }
+  }
+
+  @Test(.dependencies) func setSelectionNilClosesSettingsWindow() async {
+    var state = SettingsFeature.State()
+    state.selection = .general
+    let store = TestStore(initialState: state) {
+      SettingsFeature()
+    }
+
+    await store.send(.setSelection(nil)) {
+      $0.selection = nil
     }
   }
 
@@ -247,6 +261,37 @@ struct SettingsFeatureTests {
     await store.receive(\.delegate.settingsChanged)
     #expect(store.state.repositorySettings?.globalDefaultWorktreeBaseDirectoryPath == expectedPath)
     #expect(settingsFile.global.defaultWorktreeBaseDirectoryPath == expectedPath)
+  }
+
+  // MARK: - Sorted repositories.
+
+  @Test(.dependencies) func repositoriesChangedSortsByNameCaseInsensitive() async {
+    let repoC = Repository(
+      id: "/tmp/charlie",
+      rootURL: URL(fileURLWithPath: "/tmp/charlie"),
+      name: "Charlie",
+      worktrees: [],
+    )
+    let repoA = Repository(
+      id: "/tmp/alpha",
+      rootURL: URL(fileURLWithPath: "/tmp/alpha"),
+      name: "alpha",
+      worktrees: [],
+    )
+    let repoB = Repository(
+      id: "/tmp/bravo",
+      rootURL: URL(fileURLWithPath: "/tmp/bravo"),
+      name: "Bravo",
+      worktrees: [],
+    )
+
+    let store = TestStore(initialState: SettingsFeature.State()) {
+      SettingsFeature()
+    }
+
+    await store.send(.repositoriesChanged([repoC, repoA, repoB])) {
+      $0.sortedRepositoryIDs = [repoA.id, repoB.id, repoC.id]
+    }
   }
 
   // MARK: - Keyboard shortcut overrides.

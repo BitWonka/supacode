@@ -6,10 +6,10 @@ struct AppearanceSettingsView: View {
 
   var body: some View {
     let openActionOptions = OpenWorktreeAction.availableCases
-    VStack(alignment: .leading) {
-      Form {
-        Section("Appearance") {
-          HStack {
+    Form {
+      Section {
+        LabeledContent("Appearance") {
+          HStack(spacing: 12) {
             let appearanceMode = $store.appearanceMode
             ForEach(AppearanceMode.allCases) { mode in
               AppearanceOptionCardView(
@@ -20,40 +20,63 @@ struct AppearanceSettingsView: View {
               }
             }
           }
+        }
+        Toggle(isOn: $store.terminalThemeSyncEnabled) {
+          Text("Sync with Terminal")
+          Text("Applies the appearance-aware Supacode color palette.")
+        }
+        if !store.terminalThemeSyncEnabled {
           VStack(alignment: .leading, spacing: 4) {
-            Text("Terminal theming follows Ghostty config")
-            Text("For example, add the following line to `~/.config/ghostty/config`")
-            Text("theme = light:Monokai Pro Light Sun,dark:Dimmed Monokai")
-              .monospaced()
+            Text("Add a theme to `~/.config/ghostty/config`")
+            Text("e.g. `theme = light:Monokai Pro Light Sun,dark:Dimmed Monokai`")
           }
           .font(.footnote)
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
         }
-        Section("Default Editor") {
-          Picker(
-            "Default editor",
-            selection: $store.defaultEditorID
-          ) {
-            Text("Automatic")
-              .tag(OpenWorktreeAction.automaticSettingsID)
-            ForEach(openActionOptions) { action in
-              Text(action.labelTitle)
-                .tag(action.settingsID)
-            }
+      }
+      Section {
+        Toggle(
+          "Confirm before Quitting",
+          isOn: $store.confirmBeforeQuit
+        )
+        .help("Ask before quitting Supacode")
+      }
+      Section("Editor") {
+        Picker(
+          selection: $store.defaultEditorID
+        ) {
+          Text("Automatic")
+            .tag(OpenWorktreeAction.automaticSettingsID)
+          ForEach(openActionOptions) { action in
+            Text(action.labelTitle)
+              .tag(action.settingsID)
           }
-          .help("Applies to worktrees without repository overrides.")
-        }
-        Section("Quit") {
-          Toggle(
-            "Confirm before quitting",
-            isOn: $store.confirmBeforeQuit
-          )
-          .help("Ask before quitting Supacode")
+        } label: {
+          Text("Default Editor")
+          Text("Applies to Worktrees without repository overrides.")
         }
       }
-      .formStyle(.grouped)
+      Section {
+        Toggle(isOn: $store.analyticsEnabled) {
+          Text("Share Analytics")
+          Text("Anonymous usage data helps improve Supacode.")
+        }
+        Toggle(isOn: $store.crashReportsEnabled) {
+          Text("Share Crash Reports")
+          Text("Anonymous crash reports help improve stability.")
+        }
+      } header: {
+        Text("Analytics")
+      } footer: {
+        Text("Changes to Analytics require Supacode to restart before they take effect.")
+      }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .formStyle(.grouped)
+    .padding(.top, -20)
+    .padding(.leading, -8)
+    .padding(.trailing, -6)
+
+    .navigationTitle("General")
   }
 }

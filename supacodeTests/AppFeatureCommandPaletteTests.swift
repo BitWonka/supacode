@@ -8,24 +8,17 @@ import Testing
 
 @MainActor
 struct AppFeatureCommandPaletteTests {
-  @Test(.dependencies) func openSettingsShowsWindow() async {
-    let shown = LockIsolated(false)
+  @Test(.dependencies) func openSettingsSetsSelection() async {
     var state = AppFeature.State()
     state.settings.selection = .updates
     let store = TestStore(initialState: state) {
       AppFeature()
-    } withDependencies: {
-      $0.settingsWindowClient.show = {
-        shown.withValue { $0 = true }
-      }
     }
 
     await store.send(.commandPalette(.delegate(.openSettings)))
     await store.receive(\.settings.setSelection) {
       $0.settings.selection = .general
     }
-    await store.finish()
-    #expect(shown.value)
   }
 
   @Test(.dependencies) func newWorktreeDispatchesCreateRandomWorktree() async {

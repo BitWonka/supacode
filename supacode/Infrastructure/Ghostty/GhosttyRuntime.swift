@@ -1,9 +1,12 @@
 import AppKit
 import GhosttyKit
+import Sharing
 import SwiftUI
 import UniformTypeIdentifiers
 
 final class GhosttyRuntime {
+  private static let logger = SupaLogger("Ghostty")
+
   final class SurfaceReference {
     let surface: ghostty_surface_t
     var isValid = true
@@ -141,6 +144,26 @@ final class GhosttyRuntime {
   func unregisterSurface(_ ref: SurfaceReference) {
     ref.invalidate()
     surfaceRefs = surfaceRefs.filter { $0.isValid }
+  }
+
+  /// Reloads the full app config from disk and re-applies the current color scheme.
+  func reloadAppConfig() {
+    guard let app else {
+      Self.logger.warning("Cannot reload app config: Ghostty app instance is nil.")
+      return
+    }
+    var target = ghostty_target_s()
+    target.tag = GHOSTTY_TARGET_APP
+    guard let config = Self.loadConfig() else {
+      Self.logger.warning("Failed to reload app config.")
+      return
+    }
+    applyConfig(config, target: target, app: app)
+    ghostty_config_free(config)
+    if let lastColorScheme {
+      ghostty_app_set_color_scheme(app, lastColorScheme)
+      applyColorSchemeToSurfaces(lastColorScheme)
+    }
   }
 
   func reloadConfig(soft: Bool, target: ghostty_target_s) {
@@ -440,12 +463,51 @@ final class GhosttyRuntime {
   }
 
   private static func loadConfig() -> ghostty_config_t? {
+    @Shared(.settingsFile) var settingsFile
     guard let config = ghostty_config_new() else { return nil }
     ghostty_config_load_default_files(config)
     ghostty_config_load_recursive_files(config)
     ghostty_config_load_cli_args(config)
+    loadBundledOverrides(into: config)
+    loadBundledTheme(into: config, enabled: settingsFile.global.terminalThemeSyncEnabled)
     ghostty_config_finalize(config)
     return config
+  }
+
+  /// Applies Supacode-specific config (padding values) that takes precedence over user settings.
+  private static func loadBundledOverrides(into config: ghostty_config_t) {
+    let defaults = "window-padding-x = 14\nwindow-padding-y = 12,0\n"
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("supacode-defaults.conf")
+    do {
+      try defaults.write(to: tempURL, atomically: true, encoding: .utf8)
+    } catch {
+      logger.warning("Failed to write bundled defaults: \(error.localizedDescription)")
+      return
+    }
+    tempURL.path.withCString { ghostty_config_load_file(config, $0) }
+  }
+
+  /// When terminal theme sync is enabled, loads the bundled Supacode
+  /// light/dark theme, overriding any user-configured theme. When disabled, the user's Ghostty theme is preserved.
+  private static func loadBundledTheme(into config: ghostty_config_t, enabled: Bool) {
+    guard enabled else { return }
+    guard
+      let lightPath = Bundle.main.path(forResource: "Supacode Light", ofType: nil),
+      let darkPath = Bundle.main.path(forResource: "Supacode Dark", ofType: nil)
+    else {
+      assertionFailure("Bundled Supacode themes missing from app bundle.")
+      logger.warning("Bundled Supacode themes missing from app bundle.")
+      return
+    }
+    let line = "theme = light:\(lightPath),dark:\(darkPath)\n"
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("supacode-theme.conf")
+    do {
+      try line.write(to: tempURL, atomically: true, encoding: .utf8)
+    } catch {
+      logger.warning("Failed to write bundled theme config: \(error.localizedDescription)")
+      return
+    }
+    tempURL.path.withCString { ghostty_config_load_file(config, $0) }
   }
 
   func keyboardShortcut(for action: String) -> KeyboardShortcut? {

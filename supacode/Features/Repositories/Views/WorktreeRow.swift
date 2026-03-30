@@ -317,7 +317,7 @@ private struct StatusIndicator: View {
         if showsNotificationIndicator {
           NotificationPopoverButton(notifications: notifications) {
             Circle()
-              .fill(.red)
+              .fill(.orange)
               .frame(width: 6, height: 6)
               .accessibilityLabel("Unread notifications")
           }
