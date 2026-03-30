@@ -596,18 +596,21 @@ final class WorktreeTerminalState {
   }
 
   private func formatCommandInput(_ script: String) -> String? {
-    let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return nil }
-    return worktree.scriptEnvironmentExportPrefix + trimmed + "\n"
+    makeCommandInput(
+      script: script,
+      environmentExportPrefix: worktree.scriptEnvironmentExportPrefix
+    )
   }
 
-  // Appends `exit $?` so the shell terminates with the script's exit code.
+  // Appends a bare `exit`, which preserves the most recent command status in
+  // bash, zsh, and fish while remaining portable across those shells.
   // Without this, the interactive shell stays alive after the script finishes
   // and GHOSTTY_ACTION_SHOW_CHILD_EXITED never fires for completion detection.
   private func blockingScriptInput(_ script: String) -> String? {
-    let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return nil }
-    return worktree.scriptEnvironmentExportPrefix + "(\n" + trimmed + "\n)\nexit $?\n"
+    makeBlockingScriptInput(
+      script: script,
+      environmentExportPrefix: worktree.scriptEnvironmentExportPrefix
+    )
   }
 
   // Detects signal-based termination (e.g. Ctrl+C = exit code 130)
@@ -1055,4 +1058,26 @@ final class WorktreeTerminalState {
     }
     return maxIndex + 1
   }
+}
+
+nonisolated func makeCommandInput(
+  script: String,
+  environmentExportPrefix: String
+) -> String? {
+  let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard !trimmed.isEmpty else { return nil }
+  return environmentExportPrefix + trimmed + "\n"
+}
+
+nonisolated func makeBlockingScriptInput(
+  script: String,
+  environmentExportPrefix: String
+) -> String? {
+  guard let input = makeCommandInput(
+    script: script,
+    environmentExportPrefix: environmentExportPrefix
+  ) else {
+    return nil
+  }
+  return input + "exit\n"
 }

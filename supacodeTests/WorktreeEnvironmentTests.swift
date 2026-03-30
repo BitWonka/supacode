@@ -61,4 +61,35 @@ struct WorktreeEnvironmentTests {
     #expect(exports.contains("export SUPACODE_WORKTREE_PATH='/tmp/my repo/wt 1'"))
     #expect(exports.contains("export SUPACODE_ROOT_PATH='/tmp/my repo/.bare'"))
   }
+
+  @Test func blockingScriptInputUsesPortableBareExit() {
+    let worktree = Worktree(
+      id: "/tmp/repo/wt-1",
+      name: "feature-branch",
+      detail: "detail",
+      workingDirectory: URL(fileURLWithPath: "/tmp/repo/wt-1"),
+      repositoryRootURL: URL(fileURLWithPath: "/tmp/repo"),
+    )
+
+    let input = makeBlockingScriptInput(
+      script: """
+      docker compose down
+      codex exec "test"
+      """,
+      environmentExportPrefix: worktree.scriptEnvironmentExportPrefix
+    )
+
+    #expect(input?.contains("docker compose down\ncodex exec \"test\"\nexit\n") == true)
+    #expect(input?.contains("(\n") == false)
+    #expect(input?.contains("exit $?") == false)
+  }
+
+  @Test func blockingScriptInputReturnsNilForWhitespaceOnlyScripts() {
+    #expect(
+      makeBlockingScriptInput(
+        script: "   \n  ",
+        environmentExportPrefix: "export SUPACODE_ROOT_PATH='/tmp/repo'\n"
+      ) == nil
+    )
+  }
 }
