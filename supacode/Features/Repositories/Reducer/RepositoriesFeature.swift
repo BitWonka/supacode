@@ -83,7 +83,7 @@ struct RepositoriesFeature {
     var removingRepositoryIDs: Set<Repository.ID> = []
     var pinnedWorktreeIDs: [Worktree.ID] = []
     var archivedWorktreeIDs: [Worktree.ID] = []
-    var automaticallyArchiveMergedWorktrees = false
+    var mergedWorktreeAction: MergedWorktreeAction?
     var moveNotifiedWorktreeToTop = true
     var lastFocusedWorktreeID: Worktree.ID?
     var shouldRestoreLastFocusedWorktree = false
@@ -238,7 +238,7 @@ struct RepositoriesFeature {
       pullRequestsByWorktreeID: [Worktree.ID: GithubPullRequest?]
     )
     case setGithubIntegrationEnabled(Bool)
-    case setAutomaticallyArchiveMergedWorktrees(Bool)
+    case setMergedWorktreeAction(MergedWorktreeAction?)
     case setMoveNotifiedWorktreeToTop(Bool)
     case pullRequestAction(Worktree.ID, PullRequestAction)
     case showToast(StatusToast)
@@ -2299,6 +2299,7 @@ struct RepositoriesFeature {
           return .none
         }
         var archiveWorktreeIDs: [Worktree.ID] = []
+        var deleteWorktreeIDs: [Worktree.ID] = []
         for worktreeID in pullRequestsByWorktreeID.keys.sorted() {
           guard let worktree = repository.worktrees[id: worktreeID] else {
             continue
@@ -2315,7 +2316,7 @@ struct RepositoriesFeature {
             pullRequest: pullRequest,
             state: &state
           )
-          if state.automaticallyArchiveMergedWorktrees,
+          if let mergedAction = state.mergedWorktreeAction,
             !previousMerged,
             nextMerged,
             !state.isMainWorktree(worktree),
@@ -2323,17 +2324,21 @@ struct RepositoriesFeature {
             !state.deletingWorktreeIDs.contains(worktreeID),
             !state.deleteScriptWorktreeIDs.contains(worktreeID)
           {
-            archiveWorktreeIDs.append(worktreeID)
+            switch mergedAction {
+            case .archive:
+              archiveWorktreeIDs.append(worktreeID)
+            case .delete:
+              deleteWorktreeIDs.append(worktreeID)
+            }
           }
         }
-        guard !archiveWorktreeIDs.isEmpty else {
+        let effects: [Effect<Action>] =
+          archiveWorktreeIDs.map { .send(.archiveWorktreeConfirmed($0, repositoryID)) }
+          + deleteWorktreeIDs.map { .send(.deleteWorktreeConfirmed($0, repositoryID)) }
+        guard !effects.isEmpty else {
           return .none
         }
-        return .merge(
-          archiveWorktreeIDs.map { worktreeID in
-            .send(.archiveWorktreeConfirmed(worktreeID, repositoryID))
-          }
-        )
+        return .merge(effects)
 
       case .pullRequestAction(let worktreeID, let action):
         guard let worktree = state.worktree(for: worktreeID),
@@ -2659,8 +2664,8 @@ struct RepositoriesFeature {
           .cancel(id: CancelID.githubIntegrationRecovery)
         )
 
-      case .setAutomaticallyArchiveMergedWorktrees(let isEnabled):
-        state.automaticallyArchiveMergedWorktrees = isEnabled
+      case .setMergedWorktreeAction(let action):
+        state.mergedWorktreeAction = action
         return .none
 
       case .setMoveNotifiedWorktreeToTop(let isEnabled):

@@ -275,8 +275,8 @@ struct AppFeature {
           .send(.repositories(.setGithubIntegrationEnabled(settings.githubIntegrationEnabled))),
           .send(
             .repositories(
-              .setAutomaticallyArchiveMergedWorktrees(
-                settings.automaticallyArchiveMergedWorktrees
+              .setMergedWorktreeAction(
+                settings.mergedWorktreeAction
               )
             )
           ),

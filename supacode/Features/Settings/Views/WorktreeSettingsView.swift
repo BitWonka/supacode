@@ -42,9 +42,21 @@ struct WorktreeSettingsView: View {
         }
       }
       Section("Clean-up") {
-        Toggle(isOn: $store.automaticallyArchiveMergedWorktrees) {
-          Text("Automatically archive merged worktrees")
-          Text("Archives worktrees when their pull requests are merged.")
+        Picker(selection: $store.mergedWorktreeAction) {
+          Text("Do nothing").tag(MergedWorktreeAction?.none)
+          ForEach(MergedWorktreeAction.allCases) { action in
+            Text(action.title).tag(MergedWorktreeAction?.some(action))
+          }
+        } label: {
+          Text("When a pull request is merged")
+          switch store.mergedWorktreeAction {
+          case .archive:
+            Text("Archives worktrees when their pull requests are merged.")
+          case .delete:
+            Text("Follows the \"Delete local branch with worktree\" option below.")
+          case nil:
+            EmptyView()
+          }
         }
         Toggle(isOn: $store.deleteBranchOnDeleteWorktree) {
           Text("Delete local branch with worktree")

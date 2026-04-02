@@ -13,7 +13,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
   var crashReportsEnabled: Bool
   var githubIntegrationEnabled: Bool
   var deleteBranchOnDeleteWorktree: Bool
-  var automaticallyArchiveMergedWorktrees: Bool
+  var mergedWorktreeAction: MergedWorktreeAction?
   var promptForWorktreeCreation: Bool
   var fetchOriginBeforeWorktreeCreation: Bool
   var defaultWorktreeBaseDirectoryPath: String?
@@ -38,7 +38,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     crashReportsEnabled: true,
     githubIntegrationEnabled: true,
     deleteBranchOnDeleteWorktree: true,
-    automaticallyArchiveMergedWorktrees: false,
+    mergedWorktreeAction: nil,
     promptForWorktreeCreation: true,
     fetchOriginBeforeWorktreeCreation: true,
     copyIgnoredOnWorktreeCreate: false,
@@ -64,7 +64,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     crashReportsEnabled: Bool,
     githubIntegrationEnabled: Bool,
     deleteBranchOnDeleteWorktree: Bool,
-    automaticallyArchiveMergedWorktrees: Bool,
+    mergedWorktreeAction: MergedWorktreeAction? = nil,
     promptForWorktreeCreation: Bool,
     fetchOriginBeforeWorktreeCreation: Bool = true,
     copyIgnoredOnWorktreeCreate: Bool = false,
@@ -88,7 +88,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     self.crashReportsEnabled = crashReportsEnabled
     self.githubIntegrationEnabled = githubIntegrationEnabled
     self.deleteBranchOnDeleteWorktree = deleteBranchOnDeleteWorktree
-    self.automaticallyArchiveMergedWorktrees = automaticallyArchiveMergedWorktrees
+    self.mergedWorktreeAction = mergedWorktreeAction
     self.promptForWorktreeCreation = promptForWorktreeCreation
     self.fetchOriginBeforeWorktreeCreation = fetchOriginBeforeWorktreeCreation
     self.copyIgnoredOnWorktreeCreate = copyIgnoredOnWorktreeCreate
@@ -137,9 +137,30 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     deleteBranchOnDeleteWorktree =
       try container.decodeIfPresent(Bool.self, forKey: .deleteBranchOnDeleteWorktree)
       ?? Self.default.deleteBranchOnDeleteWorktree
-    automaticallyArchiveMergedWorktrees =
-      try container.decodeIfPresent(Bool.self, forKey: .automaticallyArchiveMergedWorktrees)
-      ?? Self.default.automaticallyArchiveMergedWorktrees
+    // `try?` intentionally swallows decoding errors (e.g. unrecognized raw values
+    // from a future app version) and falls through to the legacy migration path,
+    // which defaults to `nil`. Silently resetting the preference is acceptable
+    // because `nil` (do nothing) is the safest default.
+    if let action = try? container.decodeIfPresent(MergedWorktreeAction.self, forKey: .mergedWorktreeAction) {
+      mergedWorktreeAction = action
+    } else {
+      // Legacy migration.
+      struct LegacyCodingKey: CodingKey {
+        var stringValue: String
+        init?(stringValue: String) { self.stringValue = stringValue }
+        var intValue: Int? { nil }
+        init?(intValue: Int) { nil }
+      }
+      let legacy = try decoder.container(keyedBy: LegacyCodingKey.self)
+      if let legacyBool = try legacy.decodeIfPresent(
+        Bool.self,
+        forKey: LegacyCodingKey(stringValue: "automaticallyArchiveMergedWorktrees")!
+      ) {
+        mergedWorktreeAction = legacyBool ? .archive : Self.default.mergedWorktreeAction
+      } else {
+        mergedWorktreeAction = Self.default.mergedWorktreeAction
+      }
+    }
     promptForWorktreeCreation =
       try container.decodeIfPresent(Bool.self, forKey: .promptForWorktreeCreation)
       ?? Self.default.promptForWorktreeCreation

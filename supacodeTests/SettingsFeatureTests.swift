@@ -26,7 +26,7 @@ struct SettingsFeatureTests {
       crashReportsEnabled: true,
       githubIntegrationEnabled: true,
       deleteBranchOnDeleteWorktree: false,
-      automaticallyArchiveMergedWorktrees: true,
+      mergedWorktreeAction: .archive,
       promptForWorktreeCreation: true,
       terminalThemeSyncEnabled: false,
     )
@@ -53,7 +53,7 @@ struct SettingsFeatureTests {
       $0.crashReportsEnabled = true
       $0.githubIntegrationEnabled = true
       $0.deleteBranchOnDeleteWorktree = false
-      $0.automaticallyArchiveMergedWorktrees = true
+      $0.mergedWorktreeAction = .archive
       $0.promptForWorktreeCreation = true
       $0.fetchOriginBeforeWorktreeCreation = true
       $0.terminalThemeSyncEnabled = false
@@ -77,7 +77,7 @@ struct SettingsFeatureTests {
       crashReportsEnabled: false,
       githubIntegrationEnabled: true,
       deleteBranchOnDeleteWorktree: true,
-      automaticallyArchiveMergedWorktrees: false,
+      mergedWorktreeAction: nil,
       promptForWorktreeCreation: false
     )
     @Shared(.settingsFile) var settingsFile
@@ -105,7 +105,7 @@ struct SettingsFeatureTests {
       crashReportsEnabled: initialSettings.crashReportsEnabled,
       githubIntegrationEnabled: initialSettings.githubIntegrationEnabled,
       deleteBranchOnDeleteWorktree: initialSettings.deleteBranchOnDeleteWorktree,
-      automaticallyArchiveMergedWorktrees: initialSettings.automaticallyArchiveMergedWorktrees,
+      mergedWorktreeAction: initialSettings.mergedWorktreeAction,
       promptForWorktreeCreation: initialSettings.promptForWorktreeCreation
     )
     await store.receive(\.delegate.settingsChanged)
@@ -185,7 +185,7 @@ struct SettingsFeatureTests {
       crashReportsEnabled: false,
       githubIntegrationEnabled: true,
       deleteBranchOnDeleteWorktree: true,
-      automaticallyArchiveMergedWorktrees: true,
+      mergedWorktreeAction: .archive,
       promptForWorktreeCreation: false
     )
 
@@ -204,7 +204,7 @@ struct SettingsFeatureTests {
       $0.crashReportsEnabled = false
       $0.githubIntegrationEnabled = true
       $0.deleteBranchOnDeleteWorktree = true
-      $0.automaticallyArchiveMergedWorktrees = true
+      $0.mergedWorktreeAction = .archive
       $0.promptForWorktreeCreation = false
       $0.selection = selection
       $0.repositorySettings = RepositorySettingsFeature.State(

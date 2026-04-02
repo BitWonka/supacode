@@ -20,7 +20,7 @@ struct SettingsFeature {
     var crashReportsEnabled: Bool
     var githubIntegrationEnabled: Bool
     var deleteBranchOnDeleteWorktree: Bool
-    var automaticallyArchiveMergedWorktrees: Bool
+    var mergedWorktreeAction: MergedWorktreeAction?
     var promptForWorktreeCreation: Bool
     var fetchOriginBeforeWorktreeCreation: Bool
     var copyIgnoredOnWorktreeCreate: Bool
@@ -52,7 +52,7 @@ struct SettingsFeature {
       crashReportsEnabled = settings.crashReportsEnabled
       githubIntegrationEnabled = settings.githubIntegrationEnabled
       deleteBranchOnDeleteWorktree = settings.deleteBranchOnDeleteWorktree
-      automaticallyArchiveMergedWorktrees = settings.automaticallyArchiveMergedWorktrees
+      mergedWorktreeAction = settings.mergedWorktreeAction
       promptForWorktreeCreation = settings.promptForWorktreeCreation
       fetchOriginBeforeWorktreeCreation = settings.fetchOriginBeforeWorktreeCreation
       copyIgnoredOnWorktreeCreate = settings.copyIgnoredOnWorktreeCreate
@@ -80,7 +80,7 @@ struct SettingsFeature {
         crashReportsEnabled: crashReportsEnabled,
         githubIntegrationEnabled: githubIntegrationEnabled,
         deleteBranchOnDeleteWorktree: deleteBranchOnDeleteWorktree,
-        automaticallyArchiveMergedWorktrees: automaticallyArchiveMergedWorktrees,
+        mergedWorktreeAction: mergedWorktreeAction,
         promptForWorktreeCreation: promptForWorktreeCreation,
         fetchOriginBeforeWorktreeCreation: fetchOriginBeforeWorktreeCreation,
         copyIgnoredOnWorktreeCreate: copyIgnoredOnWorktreeCreate,
@@ -163,7 +163,7 @@ struct SettingsFeature {
         state.crashReportsEnabled = normalizedSettings.crashReportsEnabled
         state.githubIntegrationEnabled = normalizedSettings.githubIntegrationEnabled
         state.deleteBranchOnDeleteWorktree = normalizedSettings.deleteBranchOnDeleteWorktree
-        state.automaticallyArchiveMergedWorktrees = normalizedSettings.automaticallyArchiveMergedWorktrees
+        state.mergedWorktreeAction = normalizedSettings.mergedWorktreeAction
         state.promptForWorktreeCreation = normalizedSettings.promptForWorktreeCreation
         state.fetchOriginBeforeWorktreeCreation = normalizedSettings.fetchOriginBeforeWorktreeCreation
         state.copyIgnoredOnWorktreeCreate = normalizedSettings.copyIgnoredOnWorktreeCreate

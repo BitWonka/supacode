@@ -9,7 +9,7 @@ struct AppFeatureSettingsChangedTests {
   @Test(.dependencies) func settingsChangedPropagatesRepositorySettings() async {
     var settings = GlobalSettings.default
     settings.githubIntegrationEnabled = false
-    settings.automaticallyArchiveMergedWorktrees = true
+    settings.mergedWorktreeAction = .archive
     settings.moveNotifiedWorktreeToTop = false
     let store = TestStore(initialState: AppFeature.State()) {
       AppFeature()
@@ -19,8 +19,8 @@ struct AppFeatureSettingsChangedTests {
     await store.receive(\.repositories.setGithubIntegrationEnabled) {
       $0.repositories.githubIntegrationAvailability = .disabled
     }
-    await store.receive(\.repositories.setAutomaticallyArchiveMergedWorktrees) {
-      $0.repositories.automaticallyArchiveMergedWorktrees = true
+    await store.receive(\.repositories.setMergedWorktreeAction) {
+      $0.repositories.mergedWorktreeAction = .archive
     }
     await store.receive(\.repositories.setMoveNotifiedWorktreeToTop) {
       $0.repositories.moveNotifiedWorktreeToTop = false

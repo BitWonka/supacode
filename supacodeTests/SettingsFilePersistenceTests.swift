@@ -77,6 +77,74 @@ struct SettingsFilePersistenceTests {
     #expect(reloaded == .default)
   }
 
+  @Test(.dependencies) func decodesLegacyAutoArchiveTrueAsMergedWorktreeActionArchive() throws {
+    let legacy = LegacySettingsFileWithArchiveFlag(
+      global: LegacyGlobalSettingsWithArchiveFlag(
+        appearanceMode: .dark,
+        updatesAutomaticallyCheckForUpdates: true,
+        updatesAutomaticallyDownloadUpdates: false,
+        automaticallyArchiveMergedWorktrees: true
+      ),
+      repositories: [:]
+    )
+    let data = try JSONEncoder().encode(legacy)
+    let storage = MutableTestStorage(initialData: data)
+
+    let settings: SettingsFile = withDependencies {
+      $0.settingsFileStorage = storage.storage
+    } operation: {
+      @Shared(.settingsFile) var settings: SettingsFile
+      return settings
+    }
+
+    #expect(settings.global.mergedWorktreeAction == .archive)
+  }
+
+  @Test(.dependencies) func decodesLegacyAutoArchiveFalseAsMergedWorktreeActionNil() throws {
+    let legacy = LegacySettingsFileWithArchiveFlag(
+      global: LegacyGlobalSettingsWithArchiveFlag(
+        appearanceMode: .dark,
+        updatesAutomaticallyCheckForUpdates: true,
+        updatesAutomaticallyDownloadUpdates: false,
+        automaticallyArchiveMergedWorktrees: false
+      ),
+      repositories: [:]
+    )
+    let data = try JSONEncoder().encode(legacy)
+    let storage = MutableTestStorage(initialData: data)
+
+    let settings: SettingsFile = withDependencies {
+      $0.settingsFileStorage = storage.storage
+    } operation: {
+      @Shared(.settingsFile) var settings: SettingsFile
+      return settings
+    }
+
+    #expect(settings.global.mergedWorktreeAction == nil)
+  }
+
+  @Test(.dependencies) func roundTripsMergedWorktreeActionDelete() throws {
+    let storage = SettingsTestStorage()
+
+    var settings: SettingsFile = withDependencies {
+      $0.settingsFileStorage = storage.storage
+    } operation: {
+      @Shared(.settingsFile) var settings: SettingsFile
+      return settings
+    }
+
+    settings.global.mergedWorktreeAction = .delete
+
+    let reloaded: SettingsFile = withDependencies {
+      $0.settingsFileStorage = storage.storage
+    } operation: {
+      @Shared(.settingsFile) var reloaded: SettingsFile
+      return reloaded
+    }
+
+    #expect(reloaded.global.mergedWorktreeAction == .delete)
+  }
+
   @Test(.dependencies) func decodesMissingInAppNotificationsEnabled() throws {
     let legacy = LegacySettingsFile(
       global: LegacyGlobalSettings(
@@ -108,7 +176,7 @@ struct SettingsFilePersistenceTests {
     #expect(settings.global.crashReportsEnabled == true)
     #expect(settings.global.githubIntegrationEnabled == true)
     #expect(settings.global.deleteBranchOnDeleteWorktree == true)
-    #expect(settings.global.automaticallyArchiveMergedWorktrees == false)
+    #expect(settings.global.mergedWorktreeAction == nil)
     #expect(settings.global.promptForWorktreeCreation == true)
     #expect(settings.global.defaultWorktreeBaseDirectoryPath == nil)
     #expect(settings.global.defaultEditorID == OpenWorktreeAction.automaticSettingsID)
@@ -158,4 +226,16 @@ private struct LegacyGlobalSettings: Codable {
   var appearanceMode: AppearanceMode
   var updatesAutomaticallyCheckForUpdates: Bool
   var updatesAutomaticallyDownloadUpdates: Bool
+}
+
+private struct LegacySettingsFileWithArchiveFlag: Codable {
+  var global: LegacyGlobalSettingsWithArchiveFlag
+  var repositories: [String: RepositorySettings]
+}
+
+private struct LegacyGlobalSettingsWithArchiveFlag: Codable {
+  var appearanceMode: AppearanceMode
+  var updatesAutomaticallyCheckForUpdates: Bool
+  var updatesAutomaticallyDownloadUpdates: Bool
+  var automaticallyArchiveMergedWorktrees: Bool
 }
