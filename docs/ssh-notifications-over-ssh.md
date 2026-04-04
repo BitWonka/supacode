@@ -4,6 +4,16 @@
 
 Show Supacode notifications when a coding agent is running on a remote machine over `ssh`.
 
+## Status
+
+This is still a design doc, not shipped behavior.
+
+The current codebase remains socket-only for agent hooks:
+
+- `AgentHookSettingsCommand` only generates Unix-socket commands
+- `ClaudeHookSettings` and `CodexHookSettings` only install those socket commands
+- there is no `SUPACODE_REMOTE_NOTIFICATIONS`, `SSH_CONNECTION`, or `SSH_TTY` transport switch in the app
+
 ## Decision
 
 This is feasible.
@@ -53,6 +63,8 @@ Relevant files:
 
 - `supacode/Features/Terminal/Models/WorktreeTerminalState.swift`
 - `supacode/Features/Settings/BusinessLogic/AgentHookSettingsCommand.swift`
+- `supacode/Features/Settings/BusinessLogic/ClaudeHookSettings.swift`
+- `supacode/Features/Settings/BusinessLogic/CodexHookSettings.swift`
 - `supacode/Infrastructure/AgentHookSocketServer.swift`
 
 The installed hook commands send either busy-state updates or raw JSON payloads to a local Unix domain socket under `/tmp/supacode-<uid>/pid-<pid>`.
@@ -65,13 +77,16 @@ That cannot work from a remote host:
 
 ## Existing Signals In The Repo
 
-There is already a local helper for the terminal-notification path:
+There are already local helpers for the terminal-notification path:
 
 - `bins/osc9-notify.sh`
+- `bins/osc777-notify.sh`
 
-There are already tests that verify the deduplication behavior between hook notifications and OSC notifications:
+There are already tests that verify command generation, desktop notification delivery, and deduplication behavior:
 
+- `supacodeTests/GhosttySurfaceBridgeTests.swift`
 - `supacodeTests/AgentBusyStateTests.swift`
+- `supacodeTests/AgentHookCommandTests.swift`
 
 This means the local app side is already prepared to accept terminal-originated notifications and coalesce them against richer hook notifications.
 
@@ -103,6 +118,8 @@ Why:
 ### Implementation shape
 
 Add a second hook command builder that emits terminal notifications instead of writing to the local socket.
+
+The current command-generation choke point is `AgentHookSettingsCommand`. `ClaudeHookSettings` and `CodexHookSettings` only embed those generated commands into their respective settings files, so the remote path should be added there rather than duplicated per agent.
 
 The hook command should:
 
