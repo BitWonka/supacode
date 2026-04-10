@@ -211,55 +211,7 @@ struct SupacodeApp: App {
     }
     _store = State(initialValue: appStore)
 
-    // MCP Orchestrator Socket Server
-    let mcpServer = MCPSocketServer()
-    mcpServer.getRepositories = { appStore.repositories.repositories.elements }
-    mcpServer.getWorktreeTaskStatus = { terminalManager.taskStatus(for: $0) }
-    mcpServer.sendTerminalCommand = { terminalManager.handleCommand($0) }
-    mcpServer.findWorktree = { worktreeID in
-      for repo in appStore.repositories.repositories {
-        if let worktree = repo.worktrees.first(where: { $0.id == worktreeID }) {
-          return (repository: repo, worktree: worktree)
-        }
-      }
-      return nil
-    }
-    mcpServer.getWorktreeNotifications = { id in
-      terminalManager.stateIfExists(for: id)?.notifications ?? []
-    }
-    mcpServer.getWorktreeTabInfo = { id in
-      terminalManager.stateIfExists(for: id)?.tabInfo() ?? []
-    }
-    mcpServer.readWorktreeScreen = { id, tabID, surfaceID in
-      terminalManager.stateIfExists(for: id)?.readSurfaceText(tabID: tabID, surfaceID: surfaceID)
-    }
-    mcpServer.sendToWorktreeSurface = { id, text, tabID, surfaceID in
-      terminalManager.stateIfExists(for: id)?.sendToSurface(text, tabID: tabID, surfaceID: surfaceID) ?? false
-    }
-    mcpServer.spawnAgentTab = { worktree, command, agentKind in
-      let state = terminalManager.state(for: worktree)
-      guard let result = state.createTab(initialInput: command + "\n") else { return nil }
-      state.setAgentName(surfaceID: result.surfaceID, agent: agentKind.rawValue)
-      return (tabID: result.tabID.rawValue.uuidString, surfaceID: result.surfaceID.uuidString)
-    }
-    terminalManager.onMCPEvent = { message in
-      switch message {
-      case .busy(let worktreeID, _, let surfaceID, let active):
-        mcpServer.pushEvent(.agentBusyChanged(worktreeID: worktreeID, surfaceID: surfaceID.uuidString, active: active))
-      case .notification(let worktreeID, _, let surfaceID, let notification):
-        mcpServer.pushEvent(
-          .agentNotification(
-            worktreeID: worktreeID,
-            surfaceID: surfaceID.uuidString,
-            agent: notification.agent,
-            event: notification.event,
-            title: notification.title,
-            body: notification.body,
-          )
-        )
-      }
-    }
-    // Auto-start MCP server if it was enabled before
+    let mcpServer = Self.configureMCPServer(appStore: appStore, terminalManager: terminalManager)
     if initialSettings.mcpServerEnabled {
       mcpServer.start()
     }
@@ -361,5 +313,63 @@ struct SupacodeApp: App {
     .windowToolbarStyle(.unified)
     .defaultSize(width: 720, height: 640)
     .restorationBehavior(.disabled)
+  }
+
+  // MARK: - MCP Server
+
+  private static func configureMCPServer(
+    appStore: StoreOf<AppFeature>,
+    terminalManager: WorktreeTerminalManager
+  ) -> MCPSocketServer {
+    let mcpServer = MCPSocketServer()
+    mcpServer.getRepositories = { appStore.repositories.repositories.elements }
+    mcpServer.getWorktreeTaskStatus = { terminalManager.taskStatus(for: $0) }
+    mcpServer.sendTerminalCommand = { terminalManager.handleCommand($0) }
+    mcpServer.findWorktree = { worktreeID in
+      for repo in appStore.repositories.repositories {
+        if let worktree = repo.worktrees.first(where: { $0.id == worktreeID }) {
+          return (repository: repo, worktree: worktree)
+        }
+      }
+      return nil
+    }
+    mcpServer.getWorktreeNotifications = { id in
+      terminalManager.stateIfExists(for: id)?.notifications ?? []
+    }
+    mcpServer.getWorktreeTabInfo = { id in
+      terminalManager.stateIfExists(for: id)?.tabInfo() ?? []
+    }
+    mcpServer.readWorktreeScreen = { id, tabID, surfaceID in
+      terminalManager.stateIfExists(for: id)?.readSurfaceText(tabID: tabID, surfaceID: surfaceID)
+    }
+    mcpServer.sendToWorktreeSurface = { id, text, tabID, surfaceID in
+      terminalManager.stateIfExists(for: id)?.sendToSurface(text, tabID: tabID, surfaceID: surfaceID) ?? false
+    }
+    mcpServer.spawnAgentTab = { worktree, command, agentKind in
+      let state = terminalManager.state(for: worktree)
+      guard let result = state.createTab(initialInput: command + "\n") else { return nil }
+      state.setAgentName(surfaceID: result.surfaceID, agent: agentKind.rawValue)
+      return (tabID: result.tabID.rawValue.uuidString, surfaceID: result.surfaceID.uuidString)
+    }
+    terminalManager.onMCPEvent = { message in
+      switch message {
+      case .busy(let worktreeID, _, let surfaceID, let active):
+        mcpServer.pushEvent(
+          .agentBusyChanged(worktreeID: worktreeID, surfaceID: surfaceID.uuidString, active: active)
+        )
+      case .notification(let worktreeID, _, let surfaceID, let notification):
+        mcpServer.pushEvent(
+          .agentNotification(
+            worktreeID: worktreeID,
+            surfaceID: surfaceID.uuidString,
+            agent: notification.agent,
+            event: notification.event,
+            title: notification.title,
+            body: notification.body,
+          )
+        )
+      }
+    }
+    return mcpServer
   }
 }

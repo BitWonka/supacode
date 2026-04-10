@@ -95,7 +95,7 @@ final class MCPSocketServer {
     return true
   }
 
-  private func handleNewClient(_ fd: Int32) {
+  private func handleNewClient(_ fd: Int32) { // swiftlint:disable:this identifier_name
     mcpLogger.info("MCP client connected (fd=\(fd), total=\(clients.count + 1))")
 
     let task = Task.detached { [weak self] in
@@ -119,9 +119,9 @@ final class MCPSocketServer {
         }
         guard ready > 0 else { continue }
 
-        let n = read(fd, &readBuf, readBuf.count)
-        if n <= 0 { break }
-        buffer.append(contentsOf: readBuf[0..<n])
+        let bytesRead = read(fd, &readBuf, readBuf.count)
+        if bytesRead <= 0 { break }
+        buffer.append(contentsOf: readBuf[0..<bytesRead])
         if buffer.count > 1_048_576 { break }  // 1 MB guard
 
         while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
@@ -149,17 +149,16 @@ final class MCPSocketServer {
   }
 
   private func disconnectAllClients() {
-    for (fd, task) in clients {
+    for (clientFD, task) in clients {
       task.cancel()
-      // Use shutdown to unblock poll/read — the task's defer handles close(fd)
-      shutdown(fd, SHUT_RDWR)
+      shutdown(clientFD, SHUT_RDWR)
     }
     clients.removeAll()
   }
 
   // MARK: - Request Handling
 
-  private func handleRequest(_ request: MCPSocketRequest) async -> MCPSocketResponse {
+  private func handleRequest(_ request: MCPSocketRequest) -> MCPSocketResponse {
     switch request {
     case .listWorktrees:
       return handleListWorktrees()
@@ -243,7 +242,7 @@ final class MCPSocketServer {
     if !sent {
       return .error(surfaceNotFoundMessage(worktreeID: worktreeID, tabID: tabID, surfaceID: surfaceID))
     }
-    return .ok
+    return .success
   }
 
   private func handleReadScreen(worktreeID: String, tabID: String?, surfaceID: String?) -> MCPSocketResponse {
@@ -277,13 +276,13 @@ final class MCPSocketServer {
     var all: [MCPNotificationInfo] = []
     for repo in getRepositories?() ?? [] {
       for worktree in repo.worktrees {
-        for n in getWorktreeNotifications?(worktree.id) ?? [] {
+        for notification in getWorktreeNotifications?(worktree.id) ?? [] {
           all.append(MCPNotificationInfo(
             worktreeID: worktree.id,
             worktreeName: worktree.name,
-            title: n.title,
-            body: n.body,
-            isRead: n.isRead,
+            title: notification.title,
+            body: notification.body,
+            isRead: notification.isRead,
           ))
         }
       }
@@ -294,17 +293,17 @@ final class MCPSocketServer {
   // MARK: - Writing
 
   /// Send a response to a specific client.
-  private func sendToClient(_ fd: Int32, _ message: MCPSocketMessage) {
+  private func sendToClient(_ clientFD: Int32, _ message: MCPSocketMessage) {
     guard let encoded = try? JSONEncoder().encode(message) else { return }
     var data = encoded
     data.append(UInt8(ascii: "\n"))
     var offset = 0
     while offset < data.count {
       let written = data[offset...].withUnsafeBytes { bytes in
-        write(fd, bytes.baseAddress!, bytes.count)
+        write(clientFD, bytes.baseAddress!, bytes.count)
       }
       if written <= 0 {
-        mcpLogger.warning("MCP write to fd=\(fd) failed: \(String(cString: strerror(errno)))")
+        mcpLogger.warning("MCP write to fd=\(clientFD) failed: \(String(cString: strerror(errno)))")
         return
       }
       offset += written
@@ -313,8 +312,8 @@ final class MCPSocketServer {
 
   /// Broadcast a message to all connected clients.
   private func broadcastToClients(_ message: MCPSocketMessage) {
-    for fd in clients.keys {
-      sendToClient(fd, message)
+    for clientFD in clients.keys {
+      sendToClient(clientFD, message)
     }
   }
 
@@ -331,10 +330,10 @@ final class MCPSocketServer {
     }
     let hasIDs = tabID != nil || surfaceID != nil
     let reason = hasIDs ? "The provided IDs did not match." : "You must provide surface_id."
-    let available = tabs.flatMap(\.surfaces).map { s in
-      let agent = s.agentName ?? "shell"
-      let busy = s.agentBusy ? "busy" : "idle"
-      return "surface_id=\(s.surfaceID) (\(agent), \(busy))"
+    let available = tabs.flatMap(\.surfaces).map { surface in
+      let agent = surface.agentName ?? "shell"
+      let busy = surface.agentBusy ? "busy" : "idle"
+      return "surface_id=\(surface.surfaceID) (\(agent), \(busy))"
     }
     return "Surface not found. \(reason) Available: \(available.joined(separator: ", "))"
   }

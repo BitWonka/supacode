@@ -17,7 +17,7 @@ package enum MCPSocketResponse: Codable {
   case worktrees([MCPWorktreeInfo])
   case worktreeStatus(MCPWorktreeStatusInfo)
   case spawned(surfaceID: String)
-  case ok
+  case success
   case screenContent(String)
   case notifications([MCPNotificationInfo])
   case error(String)

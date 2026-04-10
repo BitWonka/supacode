@@ -4,9 +4,9 @@ import Testing
 @testable import supacode
 
 struct MCPServerInstallerTests {
-  private func makeTempDir() -> URL {
+  private func makeTempDir() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
   }
 
@@ -25,9 +25,9 @@ struct MCPServerInstallerTests {
     #expect(installer.isClaudeInstalled())
 
     let data = try Data(contentsOf: home.appendingPathComponent(".claude.json"))
-    let root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-    let servers = root["mcpServers"] as! [String: Any]
-    let supacode = servers["supacode"] as! [String: Any]
+    let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let servers = try #require(root["mcpServers"] as? [String: Any])
+    let supacode = try #require(servers["supacode"] as? [String: Any])
     #expect(supacode["command"] as? String == "/usr/local/bin/supacode-mcp")
   }
 
@@ -57,9 +57,9 @@ struct MCPServerInstallerTests {
     #expect(installer.isClaudeInstalled())
 
     let updated = try Data(contentsOf: home.appendingPathComponent(".claude.json"))
-    let root = try JSONSerialization.jsonObject(with: updated) as! [String: Any]
+    let root = try #require(try JSONSerialization.jsonObject(with: updated) as? [String: Any])
     #expect(root["someKey"] as? Bool == true)
-    let servers = root["mcpServers"] as! [String: Any]
+    let servers = try #require(root["mcpServers"] as? [String: Any])
     #expect(servers["other-server"] != nil)
     #expect(servers["supacode"] != nil)
   }

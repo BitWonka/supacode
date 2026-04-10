@@ -351,7 +351,7 @@ final class WorktreeTerminalState {
   func sendToSurface(_ text: String, tabID: String? = nil, surfaceID: String? = nil) -> Bool {
     let resolvedSurface = resolveSurface(tabID: tabID, surfaceID: surfaceID)
     guard let surface = resolvedSurface else { return false }
-    guard let s = surface.surface else { return false }
+    guard let ghosttySurface = surface.surface else { return false }
     switch surface.bridge.state.agentKind {
     case .codex:
       surface.sendText(text)
@@ -364,7 +364,7 @@ final class WorktreeTerminalState {
         key.mods = GHOSTTY_MODS_NONE
         key.consumed_mods = GHOSTTY_MODS_NONE
         key.composing = false
-        _ = ghostty_surface_key(s, key)
+        _ = ghostty_surface_key(ghosttySurface, key)
       }
     }
     // Enter via key event (works for both)
@@ -376,7 +376,7 @@ final class WorktreeTerminalState {
     enterKey.consumed_mods = GHOSTTY_MODS_NONE
     enterKey.unshifted_codepoint = 0
     enterKey.composing = false
-    _ = ghostty_surface_key(s, enterKey)
+    _ = ghostty_surface_key(ghosttySurface, enterKey)
     return true
   }
 

@@ -29,7 +29,7 @@ nonisolated enum MCPSocketResponse: Codable {
   case worktrees([MCPWorktreeInfo])
   case worktreeStatus(MCPWorktreeStatusInfo)
   case spawned(surfaceID: String)
-  case ok
+  case success
   case screenContent(String)
   case notifications([MCPNotificationInfo])
   case error(String)
@@ -38,7 +38,9 @@ nonisolated enum MCPSocketResponse: Codable {
 /// Events pushed from the Supacode app to the MCP binary (unsolicited).
 nonisolated enum MCPSocketEvent: Codable {
   case agentBusyChanged(worktreeID: String, surfaceID: String, active: Bool)
-  case agentNotification(worktreeID: String, surfaceID: String, agent: String, event: String, title: String?, body: String?)
+  case agentNotification(
+    worktreeID: String, surfaceID: String, agent: String, event: String, title: String?, body: String?
+  )
 }
 
 /// Envelope for multiplexing requests, responses, and events on one socket.

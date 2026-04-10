@@ -26,7 +26,10 @@ struct CodingAgentsSettingsView: View {
       } header: {
         Label("MCP Orchestrator", systemImage: "network")
       } footer: {
-        Text("Register the MCP server in each agent below, then start the server here. Progress hooks must be installed for agent status tracking.")
+        Text(
+          "Register the MCP server in each agent below, then start the server here."
+            + " Progress hooks must be installed for agent status tracking."
+        )
       }
       Section {
         AgentInstallRow(
