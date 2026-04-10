@@ -37,6 +37,9 @@ struct SettingsFeature {
     var claudeNotificationsState = AgentHooksInstallState.checking
     var codexProgressState = AgentHooksInstallState.checking
     var codexNotificationsState = AgentHooksInstallState.checking
+    var mcpClaudeState = AgentHooksInstallState.checking
+    var mcpCodexState = AgentHooksInstallState.checking
+    var mcpServerRunning = false
     // nil = settings window closed, non-nil = open to this section.
     // The view layer opens the settings window when this becomes non-nil.
     var selection: SettingsSection?
@@ -74,6 +77,7 @@ struct SettingsFeature {
       shortcutOverrides = settings.shortcutOverrides
       defaultWorktreeBaseDirectoryPath =
         SupacodePaths.normalizedWorktreeBaseDirectoryPath(settings.defaultWorktreeBaseDirectoryPath) ?? ""
+      mcpServerRunning = settings.mcpServerEnabled
     }
 
     var globalSettings: GlobalSettings {
@@ -106,7 +110,8 @@ struct SettingsFeature {
           defaultWorktreeBaseDirectoryPath
         ),
         autoDeleteArchivedWorktreesAfterDays: autoDeleteArchivedWorktreesAfterDays,
-        shortcutOverrides: shortcutOverrides
+        shortcutOverrides: shortcutOverrides,
+        mcpServerEnabled: mcpServerRunning
       )
     }
   }
@@ -128,6 +133,8 @@ struct SettingsFeature {
     case agentHookInstallTapped(AgentHookSlot)
     case agentHookUninstallTapped(AgentHookSlot)
     case agentHookActionCompleted(AgentHookSlot, Result<Bool, Error>)
+    case mcpServerToggleTapped
+    case mcpServerStartFailed
     case repositorySettings(RepositorySettingsFeature.Action)
     case alert(PresentationAction<Alert>)
     case delegate(Delegate)
@@ -143,11 +150,13 @@ struct SettingsFeature {
   @CasePathable
   enum Delegate: Equatable {
     case settingsChanged(GlobalSettings)
+    case mcpServerToggle(running: Bool)
   }
 
   @Dependency(AnalyticsClient.self) private var analyticsClient
   @Dependency(ClaudeSettingsClient.self) private var claudeSettingsClient
   @Dependency(CodexSettingsClient.self) private var codexSettingsClient
+  @Dependency(MCPServerInstallerClient.self) private var mcpInstallerClient
   @Dependency(RepositoryPersistenceClient.self) private var repositoryPersistence
   @Dependency(SystemNotificationClient.self) private var systemNotificationClient
   @Dependency(\.date.now) private var now
@@ -160,7 +169,7 @@ struct SettingsFeature {
         @Shared(.settingsFile) var settingsFile
         return .merge(
           .send(.settingsLoaded(settingsFile.global)),
-          .run { [claudeSettingsClient, codexSettingsClient] send in
+          .run { [claudeSettingsClient, codexSettingsClient, mcpInstallerClient] send in
             async let claudeProgressInstalled = claudeSettingsClient.checkInstalled(true)
             async let claudeNotificationsInstalled = claudeSettingsClient.checkInstalled(false)
             async let codexProgressInstalled = codexSettingsClient.checkInstalled(true)
@@ -172,6 +181,8 @@ struct SettingsFeature {
             await send(.agentHookChecked(.codexProgress, installed: await codexProgressInstalled))
             await send(
               .agentHookChecked(.codexNotifications, installed: await codexNotificationsInstalled))
+            await send(.agentHookChecked(.mcpClaude, installed: mcpInstallerClient.isClaudeInstalled()))
+            await send(.agentHookChecked(.mcpCodex, installed: mcpInstallerClient.isCodexInstalled()))
           }
         )
 
@@ -265,13 +276,15 @@ struct SettingsFeature {
       case .agentHookInstallTapped(let slot):
         guard !state[hookSlot: slot].isLoading else { return .none }
         state[hookSlot: slot] = .installing
-        return .run { [claudeSettingsClient, codexSettingsClient] send in
+        return .run { [claudeSettingsClient, codexSettingsClient, mcpInstallerClient] send in
           do {
             switch slot {
             case .claudeProgress: try await claudeSettingsClient.installProgress()
             case .claudeNotifications: try await claudeSettingsClient.installNotifications()
             case .codexProgress: try await codexSettingsClient.installProgress()
             case .codexNotifications: try await codexSettingsClient.installNotifications()
+            case .mcpClaude: try mcpInstallerClient.installClaude()
+            case .mcpCodex: try mcpInstallerClient.installCodex()
             }
             await send(.agentHookActionCompleted(slot, .success(true)))
           } catch {
@@ -282,13 +295,15 @@ struct SettingsFeature {
       case .agentHookUninstallTapped(let slot):
         guard !state[hookSlot: slot].isLoading else { return .none }
         state[hookSlot: slot] = .uninstalling
-        return .run { [claudeSettingsClient, codexSettingsClient] send in
+        return .run { [claudeSettingsClient, codexSettingsClient, mcpInstallerClient] send in
           do {
             switch slot {
             case .claudeProgress: try await claudeSettingsClient.uninstallProgress()
             case .claudeNotifications: try await claudeSettingsClient.uninstallNotifications()
             case .codexProgress: try await codexSettingsClient.uninstallProgress()
             case .codexNotifications: try await codexSettingsClient.uninstallNotifications()
+            case .mcpClaude: try mcpInstallerClient.uninstallClaude()
+            case .mcpCodex: try mcpInstallerClient.uninstallCodex()
             }
             await send(.agentHookActionCompleted(slot, .success(false)))
           } catch {
@@ -303,6 +318,17 @@ struct SettingsFeature {
       case .agentHookActionCompleted(let slot, .failure(let error)):
         state[hookSlot: slot] = .failed(error.localizedDescription)
         return .none
+
+      case .mcpServerToggleTapped:
+        state.mcpServerRunning.toggle()
+        return .merge(
+          persist(state),
+          .send(.delegate(.mcpServerToggle(running: state.mcpServerRunning)))
+        )
+
+      case .mcpServerStartFailed:
+        state.mcpServerRunning = false
+        return persist(state)
 
       case .updateShortcut(let id, let override):
         if let override {
@@ -453,6 +479,8 @@ extension SettingsFeature.State {
       case .claudeNotifications: claudeNotificationsState
       case .codexProgress: codexProgressState
       case .codexNotifications: codexNotificationsState
+      case .mcpClaude: mcpClaudeState
+      case .mcpCodex: mcpCodexState
       }
     }
     set {
@@ -461,6 +489,8 @@ extension SettingsFeature.State {
       case .claudeNotifications: claudeNotificationsState = newValue
       case .codexProgress: codexProgressState = newValue
       case .codexNotifications: codexNotificationsState = newValue
+      case .mcpClaude: mcpClaudeState = newValue
+      case .mcpCodex: mcpCodexState = newValue
       }
     }
   }

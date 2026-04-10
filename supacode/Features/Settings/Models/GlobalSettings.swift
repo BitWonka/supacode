@@ -54,6 +54,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
   var allowArbitraryDeeplinkInput: Bool
   var autoDeleteArchivedWorktreesAfterDays: AutoDeletePeriod?
   var shortcutOverrides: [AppShortcutID: AppShortcutOverride]
+  var mcpServerEnabled: Bool
 
   static let `default` = GlobalSettings(
     appearanceMode: .dark,
@@ -82,7 +83,8 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     allowArbitraryDeeplinkInput: false,
     defaultWorktreeBaseDirectoryPath: nil,
     autoDeleteArchivedWorktreesAfterDays: nil,
-    shortcutOverrides: [:]
+    shortcutOverrides: [:],
+    mcpServerEnabled: false
   )
 
   init(
@@ -112,7 +114,8 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     allowArbitraryDeeplinkInput: Bool = false,
     defaultWorktreeBaseDirectoryPath: String? = nil,
     autoDeleteArchivedWorktreesAfterDays: AutoDeletePeriod? = nil,
-    shortcutOverrides: [AppShortcutID: AppShortcutOverride] = [:]
+    shortcutOverrides: [AppShortcutID: AppShortcutOverride] = [:],
+    mcpServerEnabled: Bool = false
   ) {
     self.appearanceMode = appearanceMode
     self.defaultEditorID = defaultEditorID
@@ -141,6 +144,7 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     self.defaultWorktreeBaseDirectoryPath = defaultWorktreeBaseDirectoryPath
     self.autoDeleteArchivedWorktreesAfterDays = autoDeleteArchivedWorktreesAfterDays
     self.shortcutOverrides = shortcutOverrides
+    self.mcpServerEnabled = mcpServerEnabled
   }
 
   /// Keys for reading renamed settings fields that no longer
@@ -245,5 +249,8 @@ nonisolated struct GlobalSettings: Codable, Equatable, Sendable {
     shortcutOverrides =
       try container.decodeIfPresent([AppShortcutID: AppShortcutOverride].self, forKey: .shortcutOverrides)
       ?? Self.default.shortcutOverrides
+    mcpServerEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .mcpServerEnabled)
+      ?? Self.default.mcpServerEnabled
   }
 }

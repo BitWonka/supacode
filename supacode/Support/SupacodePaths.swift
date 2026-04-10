@@ -81,6 +81,11 @@ nonisolated enum SupacodePaths {
     baseDirectory.appending(path: "layouts.json", directoryHint: .notDirectory)
   }
 
+  static var mcpSocketPath: String {
+    let uid = getuid()
+    return "/tmp/supacode-\(uid)/mcp.sock"
+  }
+
   static var settingsURL: URL {
     baseDirectory.appending(path: "settings.json", directoryHint: .notDirectory)
   }

@@ -32,7 +32,7 @@ else
   $(error Unknown FORMAT "$(FORMAT)". Use xcsift, xcpretty, or none)
 endif
 .DEFAULT_GOAL := help
-.PHONY: build-ghostty-xcframework build-app run-app install-dev-build archive export-archive format lint check test bump-version bump-and-release log-stream
+.PHONY: build-ghostty-xcframework build-mcp build-app run-app install-dev-build archive export-archive format lint check test bump-version bump-and-release log-stream
 
 help:  # Display this help.
 	@-+echo "Run make with one of the following targets:"
@@ -53,7 +53,11 @@ $(GHOSTTY_BUILD_OUTPUTS):
 	mkdir -p "$$terminfo_dst"; \
 	rsync -a --delete "$$terminfo_src/" "$$terminfo_dst/"
 
-build-app: build-ghostty-xcframework # Build the macOS app (Debug)
+build-mcp: # Build the MCP orchestrator binary
+	cd supacode-mcp && swift build -c release
+	cp -f supacode-mcp/.build/release/supacode-mcp Resources/supacode-mcp
+
+build-app: build-ghostty-xcframework build-mcp # Build the macOS app (Debug)
 	bash -o pipefail -c 'xcodebuild -project supacode.xcodeproj -scheme supacode -configuration Debug build -skipMacroValidation -clonedSourcePackagesDirPath "$(SPM_CACHE_DIR)" 2>&1 $(FORMATTER)'
 
 run-app: build-app # Build then launch (Debug) with log streaming
@@ -78,7 +82,7 @@ install-dev-build: build-app # install dev build to /Applications
 	ditto "$$src" "$$dst"; \
 	echo "installed $$dst"
 
-archive: build-ghostty-xcframework # Archive Release build for distribution
+archive: build-ghostty-xcframework build-mcp # Archive Release build for distribution
 	bash -o pipefail -c 'xcodebuild -project supacode.xcodeproj -scheme supacode -configuration Release -archivePath build/supacode.xcarchive archive CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$$APPLE_TEAM_ID" CODE_SIGN_IDENTITY="$$DEVELOPER_ID_IDENTITY_SHA" OTHER_CODE_SIGN_FLAGS="--timestamp" -skipMacroValidation -clonedSourcePackagesDirPath "$(SPM_CACHE_DIR)" $(XCODEBUILD_FLAGS) 2>&1 $(FORMATTER)'
 
 export-archive: # Export xarchive

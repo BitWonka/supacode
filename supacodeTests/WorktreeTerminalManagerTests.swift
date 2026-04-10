@@ -197,10 +197,10 @@ struct WorktreeTerminalManagerTests {
     #expect(manager.taskStatus(for: worktree.id) == .idle)
 
     guard
-      let tab1 = state.createTab(),
-      let tab2 = state.createTab(focusing: false),
-      let surface1 = state.splitTree(for: tab1).root?.leftmostLeaf(),
-      let surface2 = state.splitTree(for: tab2).root?.leftmostLeaf()
+      let result1 = state.createTab(),
+      let result2 = state.createTab(focusing: false),
+      let surface1 = state.splitTree(for: result1.tabID).root?.leftmostLeaf(),
+      let surface2 = state.splitTree(for: result2.tabID).root?.leftmostLeaf()
     else {
       Issue.record("Expected tabs and surfaces")
       return

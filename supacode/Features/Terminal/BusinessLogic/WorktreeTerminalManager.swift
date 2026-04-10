@@ -17,6 +17,7 @@ final class WorktreeTerminalManager {
   var selectedWorktreeID: Worktree.ID?
   var saveLayoutSnapshot: ((Worktree.ID, TerminalLayoutSnapshot?) -> Void)?
   var loadLayoutSnapshot: ((Worktree.ID) -> TerminalLayoutSnapshot?)?
+  var onMCPEvent: ((AgentHookSocketServer.Message) -> Void)?
 
   init(runtime: GhosttyRuntime, socketServer: AgentHookSocketServer? = nil) {
     self.runtime = runtime
@@ -42,8 +43,9 @@ final class WorktreeTerminalManager {
         tabID: TerminalTabID(rawValue: tabID),
         active: active
       )
+      self?.onMCPEvent?(.busy(worktreeID: decoded, tabID: tabID, surfaceID: surfaceID, active: active))
     }
-    server.onNotification = { [weak self] worktreeID, _, surfaceID, notification in
+    server.onNotification = { [weak self] worktreeID, tabID, surfaceID, notification in
       let decoded = worktreeID.removingPercentEncoding ?? worktreeID
       guard let state = self?.states[decoded] else {
         terminalLogger.debug("Dropped hook notification for unknown worktree \(decoded)")
@@ -51,7 +53,11 @@ final class WorktreeTerminalManager {
       }
       let title = notification.title ?? notification.agent
       let body = notification.body ?? ""
+      state.setAgentName(surfaceID: surfaceID, agent: notification.agent)
       state.appendHookNotification(title: title, body: body, surfaceID: surfaceID)
+      self?.onMCPEvent?(
+        .notification(worktreeID: decoded, tabID: tabID, surfaceID: surfaceID, notification: notification)
+      )
     }
   }
 

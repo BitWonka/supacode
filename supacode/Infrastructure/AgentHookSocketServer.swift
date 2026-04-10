@@ -79,7 +79,7 @@ final class AgentHookSocketServer {
 
   @discardableResult
   private func startListening(path: String) -> Bool {
-    let socketFD = Self.createSocket(path: path)
+    let socketFD = createUnixSocket(path: path)
     guard socketFD >= 0 else { return false }
 
     listenTask = Task.detached { [weak self] in
@@ -113,50 +113,6 @@ final class AgentHookSocketServer {
       }
     }
     return true
-  }
-
-  // MARK: - Socket creation (nonisolated).
-
-  private nonisolated static func createSocket(path: String) -> Int32 {
-    let socketFD = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard socketFD >= 0 else {
-      socketLogger.warning("socket() failed: \(String(cString: strerror(errno)))")
-      return -1
-    }
-
-    var addr = sockaddr_un()
-    addr.sun_family = sa_family_t(AF_UNIX)
-    let pathBytes = path.utf8CString
-    guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
-      socketLogger.warning("Socket path too long: \(path)")
-      close(socketFD)
-      return -1
-    }
-    _ = withUnsafeMutablePointer(to: &addr.sun_path) { sunPath in
-      pathBytes.withUnsafeBufferPointer { buffer in
-        memcpy(sunPath, buffer.baseAddress!, buffer.count)
-      }
-    }
-
-    let addrLen = socklen_t(MemoryLayout<sa_family_t>.size + pathBytes.count)
-    let bindResult = withUnsafePointer(to: &addr) { ptr in
-      ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-        bind(socketFD, sockaddrPtr, addrLen)
-      }
-    }
-    guard bindResult == 0 else {
-      socketLogger.warning("bind() failed: \(String(cString: strerror(errno)))")
-      close(socketFD)
-      return -1
-    }
-
-    guard listen(socketFD, 8) == 0 else {
-      socketLogger.warning("listen() failed: \(String(cString: strerror(errno)))")
-      close(socketFD)
-      return -1
-    }
-
-    return socketFD
   }
 
   // MARK: - Connection handling (nonisolated).

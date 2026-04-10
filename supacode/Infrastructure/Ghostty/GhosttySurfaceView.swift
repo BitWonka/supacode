@@ -539,7 +539,7 @@ final class GhosttySurfaceView: NSView, Identifiable {
     }
   }
 
-  private func readScreenContents() -> String {
+  func readScreenContents() -> String {
     guard let surface else { return "" }
     var text = ghostty_text_s()
     let selection = ghostty_selection_s(

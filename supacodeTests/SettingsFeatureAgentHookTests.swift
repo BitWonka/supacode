@@ -165,6 +165,12 @@ struct SettingsFeatureAgentHookTests {
     await store.receive(\.agentHookChecked) {
       $0.codexNotificationsState = .notInstalled
     }
+    await store.receive(\.agentHookChecked) {
+      $0.mcpClaudeState = .notInstalled
+    }
+    await store.receive(\.agentHookChecked) {
+      $0.mcpCodexState = .notInstalled
+    }
   }
 
   @Test(.dependencies) func taskChecksAllFourHookSlotsOnStartup() async {
@@ -197,6 +203,12 @@ struct SettingsFeatureAgentHookTests {
     }
     await store.receive(\.agentHookChecked) {
       $0.codexNotificationsState = .notInstalled
+    }
+    await store.receive(\.agentHookChecked) {
+      $0.mcpClaudeState = .notInstalled
+    }
+    await store.receive(\.agentHookChecked) {
+      $0.mcpCodexState = .notInstalled
     }
 
     #expect(

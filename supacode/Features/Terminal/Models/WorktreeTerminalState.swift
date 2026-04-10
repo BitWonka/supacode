@@ -140,7 +140,7 @@ final class WorktreeTerminalState {
     initialInput: String? = nil,
     inheritingFromSurfaceId: UUID? = nil,
     tabID: UUID? = nil
-  ) -> TerminalTabID? {
+  ) -> (tabID: TerminalTabID, surfaceID: UUID)? {
     let context: ghostty_surface_context_e =
       tabManager.tabs.isEmpty
       ? GHOSTTY_SURFACE_CONTEXT_WINDOW
@@ -164,7 +164,7 @@ final class WorktreeTerminalState {
     if shouldConsumeSetupScript {
       pendingSetupScript = false
     }
-    let tabId = createTab(
+    let result = createTab(
       TabCreation(
         title: title,
         icon: "terminal",
@@ -177,10 +177,10 @@ final class WorktreeTerminalState {
         tabID: tabID,
       )
     )
-    if shouldConsumeSetupScript, tabId != nil {
+    if shouldConsumeSetupScript, result != nil {
       onSetupScriptConsumed?()
     }
-    return tabId
+    return result
   }
 
   @discardableResult
@@ -211,7 +211,7 @@ final class WorktreeTerminalState {
     } else if let lingering = lastBlockingScriptTabByKind.removeValue(forKey: kind) {
       closeTab(lingering)
     }
-    let tabId = createTab(
+    guard let (tabId, _) = createTab(
       TabCreation(
         title: kind.tabTitle,
         icon: kind.tabIcon,
@@ -224,8 +224,7 @@ final class WorktreeTerminalState {
         context: GHOSTTY_SURFACE_CONTEXT_TAB,
         tabID: nil,
       )
-    )
-    guard let tabId else {
+    ) else {
       cleanupBlockingScriptLaunchDirectory(at: launch.directoryURL)
       blockingScriptLogger.warning("Failed to create \(kind.tabTitle) tab for worktree \(worktree.id)")
       onBlockingScriptCompleted?(kind, 1, nil)
@@ -254,7 +253,7 @@ final class WorktreeTerminalState {
     let tabID: UUID?
   }
 
-  private func createTab(_ creation: TabCreation) -> TerminalTabID? {
+  private func createTab(_ creation: TabCreation) -> (tabID: TerminalTabID, surfaceID: UUID)? {
     let tabId = tabManager.createTab(
       title: creation.title,
       icon: creation.icon,
@@ -269,13 +268,14 @@ final class WorktreeTerminalState {
       initialInput: creation.initialInput,
       context: creation.context
     )
+    guard let surface = tree.root?.leftmostLeaf() else { return nil }
     tabIsRunningById[tabId] = false
     updateShouldHideTabBar()
-    if creation.focusing, let surface = tree.root?.leftmostLeaf() {
+    if creation.focusing {
       focusSurface(surface, in: tabId)
     }
     onTabCreated?()
-    return tabId
+    return (tabID: tabId, surfaceID: surface.id)
   }
 
   func hasTab(_ tabId: TerminalTabID) -> Bool {
@@ -295,6 +295,22 @@ final class WorktreeTerminalState {
     tabManager.selectTab(tabId)
     focusSurface(in: tabId)
     emitTaskStatusIfChanged()
+  }
+
+  func setAgentName(surfaceID: UUID, agent: String) {
+    guard let surface = surfaces[surfaceID] else { return }
+    surface.bridge.state.agentName = agent
+    surface.bridge.state.agentKind = AgentKind(agent)
+  }
+
+  func setAgentNameByTab(tabID: String, agent: String) {
+    guard let tabUUID = UUID(uuidString: tabID) else { return }
+    let tid = TerminalTabID(rawValue: tabUUID)
+    guard let focusedID = focusedSurfaceIdByTab[tid],
+      let surface = surfaces[focusedID]
+    else { return }
+    surface.bridge.state.agentName = agent
+    surface.bridge.state.agentKind = AgentKind(agent)
   }
 
   /// Sets or clears the agent busy flag on a specific surface.
@@ -324,6 +340,81 @@ final class WorktreeTerminalState {
     terminalStateLogger.info("focusAndInsertText: sending \(text.count) chars to surface \(focusedId)")
     surface.requestFocus()
     surface.sendText(text)
+  }
+
+  func readSurfaceText(tabID: String? = nil, surfaceID: String? = nil) -> String? {
+    let resolvedSurface = resolveSurface(tabID: tabID, surfaceID: surfaceID)
+    guard let surface = resolvedSurface else { return nil }
+    return surface.readScreenContents()
+  }
+
+  func sendToSurface(_ text: String, tabID: String? = nil, surfaceID: String? = nil) -> Bool {
+    let resolvedSurface = resolveSurface(tabID: tabID, surfaceID: surfaceID)
+    guard let surface = resolvedSurface else { return false }
+    guard let s = surface.surface else { return false }
+    switch surface.bridge.state.agentKind {
+    case .codex:
+      surface.sendText(text)
+    case .claude, nil:
+      text.withCString { ptr in
+        var key = ghostty_input_key_s()
+        key.action = GHOSTTY_ACTION_PRESS
+        key.keycode = 0
+        key.text = ptr
+        key.mods = GHOSTTY_MODS_NONE
+        key.consumed_mods = GHOSTTY_MODS_NONE
+        key.composing = false
+        _ = ghostty_surface_key(s, key)
+      }
+    }
+    // Enter via key event (works for both)
+    var enterKey = ghostty_input_key_s()
+    enterKey.action = GHOSTTY_ACTION_PRESS
+    enterKey.keycode = 36  // macOS virtual keycode for Return
+    enterKey.text = nil
+    enterKey.mods = GHOSTTY_MODS_NONE
+    enterKey.consumed_mods = GHOSTTY_MODS_NONE
+    enterKey.unshifted_codepoint = 0
+    enterKey.composing = false
+    _ = ghostty_surface_key(s, enterKey)
+    return true
+  }
+
+  func tabInfo() -> [MCPTabInfo] {
+    tabManager.tabs.map { tab in
+      let surfaceViews = trees[tab.id]?.leaves() ?? []
+      let surfaceInfos = surfaceViews.map { view in
+        MCPSurfaceInfo(
+          surfaceID: view.id.uuidString,
+          title: view.bridge.state.title,
+          agentName: view.bridge.state.agentName,
+          agentBusy: view.bridge.state.agentBusy,
+        )
+      }
+      return MCPTabInfo(
+        tabID: tab.id.rawValue.uuidString,
+        title: tab.title,
+        isRunning: tabIsRunningById[tab.id] ?? false,
+        focusedSurfaceID: focusedSurfaceIdByTab[tab.id]?.uuidString,
+        surfaces: surfaceInfos,
+      )
+    }
+  }
+
+  private func resolveSurface(tabID: String?, surfaceID: String?) -> GhosttySurfaceView? {
+    // If surfaceID is provided, use it directly
+    if let surfaceID, let uuid = UUID(uuidString: surfaceID), let surface = surfaces[uuid] {
+      return surface
+    }
+    // If tabID is provided, use its focused surface
+    if let tabID, let tabUUID = UUID(uuidString: tabID) {
+      let tid = TerminalTabID(rawValue: tabUUID)
+      if let focusedId = focusedSurfaceIdByTab[tid], let surface = surfaces[focusedId] {
+        return surface
+      }
+    }
+    // No fallback — caller must provide tab_id or surface_id
+    return nil
   }
 
   func syncFocus(windowIsKey: Bool, windowIsVisible: Bool) {

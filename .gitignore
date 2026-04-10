@@ -65,6 +65,9 @@ fastlane/test_output
 Frameworks/GhosttyKit.xcframework
 Resources/ghostty
 Resources/terminfo
+Resources/supacode-mcp
+supacode-mcp/.build/
+supacode-mcp/Package.resolved
 *.profraw
 .env
 .DS_Store

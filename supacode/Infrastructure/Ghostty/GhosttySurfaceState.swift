@@ -8,6 +8,8 @@ final class GhosttySurfaceState {
   var pwd: String?
   var promptTitle: ghostty_action_prompt_title_e?
   var agentBusy = false
+  var agentKind: AgentKind?
+  var agentName: String?
   var progressState: ghostty_action_progress_report_state_e?
   var progressValue: Int?
   var commandExitCode: Int?

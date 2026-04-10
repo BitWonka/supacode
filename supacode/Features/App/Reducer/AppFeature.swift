@@ -267,6 +267,11 @@ struct AppFeature {
         }
         return .none
 
+      case .settings(.delegate(.mcpServerToggle)):
+        // Handled by supacodeApp.swift — the store observation layer
+        // starts/stops the MCPSocketServer directly.
+        return .none
+
       case .settings(.delegate(.settingsChanged(let settings))):
         let shouldCheckSystemNotificationPermission =
           settings.systemNotificationsEnabled && !state.lastKnownSystemNotificationsEnabled
