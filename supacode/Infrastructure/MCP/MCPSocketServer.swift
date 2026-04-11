@@ -95,15 +95,15 @@ final class MCPSocketServer {
     return true
   }
 
-  private func handleNewClient(_ fd: Int32) { // swiftlint:disable:this identifier_name
-    mcpLogger.info("MCP client connected (fd=\(fd), total=\(clients.count + 1))")
+  private func handleNewClient(_ clientFD: Int32) {
+    mcpLogger.info("MCP client connected (fd=\(clientFD), total=\(clients.count + 1))")
 
     let task = Task.detached { [weak self] in
       defer {
-        close(fd)
+        close(clientFD)
         Task { @MainActor [weak self] in
-          self?.clients.removeValue(forKey: fd)
-          mcpLogger.info("MCP client disconnected (fd=\(fd), remaining=\(self?.clients.count ?? 0))")
+          self?.clients.removeValue(forKey: clientFD)
+          mcpLogger.info("MCP client disconnected (fd=\(clientFD), remaining=\(self?.clients.count ?? 0))")
         }
       }
 
@@ -111,7 +111,7 @@ final class MCPSocketServer {
       var readBuf = [UInt8](repeating: 0, count: 8192)
 
       while !Task.isCancelled {
-        var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        var pollFD = pollfd(fd: clientFD, events: Int16(POLLIN), revents: 0)
         let ready = poll(&pollFD, 1, 200)
         if ready < 0 {
           guard errno == EINTR else { break }
@@ -119,7 +119,7 @@ final class MCPSocketServer {
         }
         guard ready > 0 else { continue }
 
-        let bytesRead = read(fd, &readBuf, readBuf.count)
+        let bytesRead = read(clientFD, &readBuf, readBuf.count)
         if bytesRead <= 0 { break }
         buffer.append(contentsOf: readBuf[0..<bytesRead])
         if buffer.count > 1_048_576 { break }  // 1 MB guard
@@ -139,13 +139,13 @@ final class MCPSocketServer {
               return self.handleRequest(request)
             }()
             await MainActor.run { [weak self] in
-              self?.sendToClient(fd, .response(id: id, response))
+              self?.sendToClient(clientFD, .response(id: id, response))
             }
           }
         }
       }
     }
-    clients[fd] = task
+    clients[clientFD] = task
   }
 
   private func disconnectAllClients() {
