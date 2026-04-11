@@ -17,7 +17,7 @@ struct MCPServerInstallerTests {
   // MARK: - Claude Code (~/.claude.json)
 
   @Test func claudeInstallCreatesConfig() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -32,7 +32,7 @@ struct MCPServerInstallerTests {
   }
 
   @Test func claudeUninstallRemovesEntry() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -44,7 +44,7 @@ struct MCPServerInstallerTests {
   }
 
   @Test func claudeInstallPreservesExistingKeys() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -64,8 +64,8 @@ struct MCPServerInstallerTests {
     #expect(servers["supacode"] != nil)
   }
 
-  @Test func claudeNotInstalledByDefault() {
-    let home = makeTempDir()
+  @Test func claudeNotInstalledByDefault() throws {
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
     #expect(!installer.isClaudeInstalled())
@@ -74,7 +74,7 @@ struct MCPServerInstallerTests {
   // MARK: - Codex (~/.codex/config.toml)
 
   @Test func codexInstallCreatesConfig() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -90,7 +90,7 @@ struct MCPServerInstallerTests {
   }
 
   @Test func codexUninstallRemovesSection() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -102,7 +102,7 @@ struct MCPServerInstallerTests {
   }
 
   @Test func codexInstallPreservesExistingSections() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -125,7 +125,7 @@ struct MCPServerInstallerTests {
   }
 
   @Test func codexUninstallPreservesOtherSections() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -160,7 +160,7 @@ struct MCPServerInstallerTests {
   }
 
   @Test func codexUninstallHandlesBlankLinesWithinSection() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
@@ -194,15 +194,15 @@ struct MCPServerInstallerTests {
     #expect(content.contains("key = \"keep\""))
   }
 
-  @Test func codexNotInstalledByDefault() {
-    let home = makeTempDir()
+  @Test func codexNotInstalledByDefault() throws {
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
     #expect(!installer.isCodexInstalled())
   }
 
   @Test func codexInstallIsIdempotent() throws {
-    let home = makeTempDir()
+    let home = try makeTempDir()
     defer { try? FileManager.default.removeItem(at: home) }
     let installer = makeInstaller(home: home)
 
