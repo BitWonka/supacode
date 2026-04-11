@@ -66,7 +66,7 @@ struct SocketClientCompletionTests {
 
     // Send notification then busy=false
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Stop",
         title: nil, body: "hello world"
@@ -74,7 +74,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s1", active: false
       ),
       to: testFD
@@ -100,7 +100,7 @@ struct SocketClientCompletionTests {
 
     // Notification with no body — should still resolve (hasNotification = true)
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Stop",
         title: nil, body: nil
@@ -108,7 +108,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s1", active: false
       ),
       to: testFD
@@ -134,7 +134,7 @@ struct SocketClientCompletionTests {
 
     // Events for a different surface — should not match
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s2",
         agent: "claude", event: "Stop",
         title: nil, body: "wrong"
@@ -142,7 +142,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s2", active: false
       ),
       to: testFD
@@ -150,7 +150,7 @@ struct SocketClientCompletionTests {
 
     // Now send correct events
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Stop",
         title: nil, body: "correct"
@@ -158,7 +158,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s1", active: false
       ),
       to: testFD
@@ -186,7 +186,7 @@ struct SocketClientCompletionTests {
 
     // Complete s2 first
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s2",
         agent: "claude", event: "Stop",
         title: nil, body: "from s2"
@@ -194,7 +194,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s2", active: false
       ),
       to: testFD
@@ -205,7 +205,7 @@ struct SocketClientCompletionTests {
 
     // Then complete s1
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Stop",
         title: nil, body: "from s1"
@@ -213,7 +213,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s1", active: false
       ),
       to: testFD
@@ -249,7 +249,7 @@ struct SocketClientCompletionTests {
 
     // Multiple notifications before idle
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Notification",
         title: nil, body: "first"
@@ -257,7 +257,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Stop",
         title: nil, body: "second"
@@ -265,7 +265,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s1", active: false
       ),
       to: testFD
@@ -289,7 +289,7 @@ struct SocketClientCompletionTests {
     )
 
     try writeEvent(
-      .agentNotification(
+      .supagentNotification(
         worktreeID: "/wt", surfaceID: "s1",
         agent: "claude", event: "Stop",
         title: nil, body: ""
@@ -297,7 +297,7 @@ struct SocketClientCompletionTests {
       to: testFD
     )
     try writeEvent(
-      .agentBusyChanged(
+      .supagentBusyChanged(
         worktreeID: "/wt", surfaceID: "s1", active: false
       ),
       to: testFD

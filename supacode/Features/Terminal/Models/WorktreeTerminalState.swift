@@ -387,8 +387,8 @@ final class WorktreeTerminalState {
         MCPSurfaceInfo(
           surfaceID: view.id.uuidString,
           title: view.bridge.state.title,
-          agentName: view.bridge.state.agentName,
-          agentBusy: view.bridge.state.agentBusy,
+          supagentName: view.bridge.state.agentName,
+          supagentBusy: view.bridge.state.agentBusy,
         )
       }
       return MCPTabInfo(

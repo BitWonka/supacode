@@ -7,7 +7,7 @@ import Foundation
 package enum MCPSocketRequest: Codable {
   case listWorktrees
   case getWorktreeStatus(worktreeID: String)
-  case spawnAgent(worktreeID: String, prompt: String?, agent: String?)
+  case spawnSupagent(worktreeID: String, prompt: String?, agent: String?)
   case sendMessage(worktreeID: String, text: String, wait: Bool?, tabID: String?, surfaceID: String?)
   case readScreen(worktreeID: String, tabID: String?, surfaceID: String?)
   case listNotifications(worktreeID: String?)
@@ -24,8 +24,8 @@ package enum MCPSocketResponse: Codable {
 }
 
 package enum MCPSocketEvent: Codable {
-  case agentBusyChanged(worktreeID: String, surfaceID: String, active: Bool)
-  case agentNotification(
+  case supagentBusyChanged(worktreeID: String, surfaceID: String, active: Bool)
+  case supagentNotification(
     worktreeID: String, surfaceID: String,
     agent: String, event: String,
     title: String?, body: String?
@@ -52,7 +52,7 @@ package struct MCPWorktreeInfo: Codable {
   package let repositoryID: String
   package let workingDirectory: String
   package let taskStatus: MCPTaskStatus
-  package let agentBusy: Bool
+  package let supagentBusy: Bool
   package let tabs: [MCPTabInfo]
 }
 
@@ -67,8 +67,8 @@ package struct MCPTabInfo: Codable {
 package struct MCPSurfaceInfo: Codable {
   package let surfaceID: String
   package let title: String?
-  package let agentName: String?
-  package let agentBusy: Bool
+  package let supagentName: String?
+  package let supagentBusy: Bool
 }
 
 package struct MCPWorktreeStatusInfo: Codable {
@@ -77,7 +77,7 @@ package struct MCPWorktreeStatusInfo: Codable {
   package let repositoryName: String
   package let workingDirectory: String
   package let taskStatus: MCPTaskStatus
-  package let agentBusy: Bool
+  package let supagentBusy: Bool
   package let tabs: [MCPTabInfo]
   package let notificationCount: Int
 }

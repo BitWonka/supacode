@@ -18,7 +18,7 @@ nonisolated enum AgentKind: String {
 nonisolated enum MCPSocketRequest: Codable {
   case listWorktrees
   case getWorktreeStatus(worktreeID: String)
-  case spawnAgent(worktreeID: String, prompt: String?, agent: String?)
+  case spawnSupagent(worktreeID: String, prompt: String?, agent: String?)
   case sendMessage(worktreeID: String, text: String, wait: Bool?, tabID: String?, surfaceID: String?)
   case readScreen(worktreeID: String, tabID: String?, surfaceID: String?)
   case listNotifications(worktreeID: String?)
@@ -37,8 +37,8 @@ nonisolated enum MCPSocketResponse: Codable {
 
 /// Events pushed from the Supacode app to the MCP binary (unsolicited).
 nonisolated enum MCPSocketEvent: Codable {
-  case agentBusyChanged(worktreeID: String, surfaceID: String, active: Bool)
-  case agentNotification(
+  case supagentBusyChanged(worktreeID: String, surfaceID: String, active: Bool)
+  case supagentNotification(
     worktreeID: String, surfaceID: String, agent: String, event: String, title: String?, body: String?
   )
 }
@@ -64,7 +64,7 @@ nonisolated struct MCPWorktreeInfo: Codable {
   let repositoryID: String
   let workingDirectory: String
   let taskStatus: MCPTaskStatus
-  let agentBusy: Bool
+  let supagentBusy: Bool
   let tabs: [MCPTabInfo]
 }
 
@@ -79,8 +79,8 @@ nonisolated struct MCPTabInfo: Codable {
 nonisolated struct MCPSurfaceInfo: Codable {
   let surfaceID: String
   let title: String?
-  let agentName: String?
-  let agentBusy: Bool
+  let supagentName: String?
+  let supagentBusy: Bool
 }
 
 nonisolated struct MCPWorktreeStatusInfo: Codable {
@@ -89,7 +89,7 @@ nonisolated struct MCPWorktreeStatusInfo: Codable {
   let repositoryName: String
   let workingDirectory: String
   let taskStatus: MCPTaskStatus
-  let agentBusy: Bool
+  let supagentBusy: Bool
   let tabs: [MCPTabInfo]
   let notificationCount: Int
 }

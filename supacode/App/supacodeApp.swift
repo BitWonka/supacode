@@ -345,7 +345,7 @@ struct SupacodeApp: App {
     mcpServer.sendToWorktreeSurface = { id, text, tabID, surfaceID in
       terminalManager.stateIfExists(for: id)?.sendToSurface(text, tabID: tabID, surfaceID: surfaceID) ?? false
     }
-    mcpServer.spawnAgentTab = { worktree, command, agentKind in
+    mcpServer.spawnSupagentTab = { worktree, command, agentKind in
       let state = terminalManager.state(for: worktree)
       guard let result = state.createTab(initialInput: command + "\n") else { return nil }
       state.setAgentName(surfaceID: result.surfaceID, agent: agentKind.rawValue)
@@ -355,11 +355,11 @@ struct SupacodeApp: App {
       switch message {
       case .busy(let worktreeID, _, let surfaceID, let active):
         mcpServer.pushEvent(
-          .agentBusyChanged(worktreeID: worktreeID, surfaceID: surfaceID.uuidString, active: active)
+          .supagentBusyChanged(worktreeID: worktreeID, surfaceID: surfaceID.uuidString, active: active)
         )
       case .notification(let worktreeID, _, let surfaceID, let notification):
         mcpServer.pushEvent(
-          .agentNotification(
+          .supagentNotification(
             worktreeID: worktreeID,
             surfaceID: surfaceID.uuidString,
             agent: notification.agent,

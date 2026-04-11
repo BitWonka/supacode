@@ -19,7 +19,7 @@ let listWorktreesTool = Tool(
   name: "list_worktrees",
   description:
     "List all repositories and worktrees managed by Supacode, "
-    + "with their current task status, agent busy state, and tab/surface info.",
+    + "with their current task status, supagent busy state, and tab/surface info.",
   inputSchema: .object([
     "type": .string("object"),
     "properties": .object([:]),
@@ -32,7 +32,7 @@ let getWorktreeStatusTool = Tool(
   name: "get_worktree_status",
   description:
     "Get detailed status for a specific worktree "
-    + "including tabs, notifications, task status, and agent busy state.",
+    + "including tabs, notifications, task status, and supagent busy state.",
   inputSchema: .object([
     "type": .string("object"),
     "properties": .object([
@@ -47,12 +47,12 @@ let getWorktreeStatusTool = Tool(
   annotations: .init(readOnlyHint: true)
 )
 
-let spawnAgentTool = Tool(
-  name: "spawn_agent",
+let spawnSupagentTool = Tool(
+  name: "spawn_supagent",
   description:
-    "Spawn a coding agent in a new terminal tab. "
+    "Spawn a coding supagent in a new terminal tab. "
     + "You MUST specify which agent to use ('claude' or 'codex'). "
-    + "Blocks until the agent finishes its initial task and returns "
+    + "Blocks until the supagent finishes its initial task and returns "
     + "the response along with surface_id for further interaction "
     + "via send_message/read_screen.",
   inputSchema: .object([
@@ -60,11 +60,11 @@ let spawnAgentTool = Tool(
     "properties": .object([
       "worktree_id": .object([
         "type": .string("string"),
-        "description": .string("The worktree ID to spawn the agent in"),
+        "description": .string("The worktree ID to spawn the supagent in"),
       ]),
       "prompt": .object([
         "type": .string("string"),
-        "description": .string("Optional prompt/task for the agent"),
+        "description": .string("Optional prompt/task for the supagent"),
       ]),
       "agent": .object([
         "type": .string("string"),
@@ -80,9 +80,9 @@ let spawnAgentTool = Tool(
 let sendMessageTool = Tool(
   name: "send_message",
   description:
-    "Send a message to a running agent's terminal. "
-    + "You MUST provide surface_id (get it from list_worktrees or spawn_agent). "
-    + "With wait=true, blocks until the agent finishes and returns its response "
+    "Send a message to a running supagent's terminal. "
+    + "You MUST provide surface_id (get it from list_worktrees or spawn_supagent). "
+    + "With wait=true, blocks until the supagent finishes and returns its response "
     + "— use this from a subagent for background execution. "
     + "With wait=false (default), returns immediately.",
   inputSchema: .object([
@@ -96,17 +96,17 @@ let sendMessageTool = Tool(
         "type": .string("string"),
         "description": .string(
           "The surface ID to send to "
-          + "(from list_worktrees tabs[].surfaces[].surfaceID or spawn_agent response)."
+          + "(from list_worktrees tabs[].surfaces[].surfaceID or spawn_supagent response)."
         ),
       ]),
       "text": .object([
         "type": .string("string"),
-        "description": .string("Message to send to the agent"),
+        "description": .string("Message to send to the supagent"),
       ]),
       "wait": .object([
         "type": .string("boolean"),
         "description": .string(
-          "If true, wait for the agent to finish and return its response. Default false."
+          "If true, wait for the supagent to finish and return its response. Default false."
         ),
       ]),
     ]),
@@ -122,7 +122,7 @@ let readScreenTool = Tool(
   name: "read_screen",
   description:
     "Read the terminal screen content for a specific surface. "
-    + "You MUST provide surface_id (get it from list_worktrees or spawn_agent).",
+    + "You MUST provide surface_id (get it from list_worktrees or spawn_supagent).",
   inputSchema: .object([
     "type": .string("object"),
     "properties": .object([
@@ -134,7 +134,7 @@ let readScreenTool = Tool(
         "type": .string("string"),
         "description": .string(
           "The surface ID to read "
-          + "(from list_worktrees tabs[].surfaces[].surfaceID or spawn_agent response)."
+          + "(from list_worktrees tabs[].surfaces[].surfaceID or spawn_supagent response)."
         ),
       ]),
     ]),
@@ -163,7 +163,7 @@ let listNotificationsTool = Tool(
 let allTools = [
   listWorktreesTool,
   getWorktreeStatusTool,
-  spawnAgentTool,
+  spawnSupagentTool,
   sendMessageTool,
   readScreenTool,
   listNotificationsTool,
@@ -267,7 +267,7 @@ await server.withMethodHandler(CallTool.self) { params in
       ) ?? ""
       return .init(content: [txt(json)])
 
-    case "spawn_agent":
+    case "spawn_supagent":
       guard let worktreeID = params.arguments?["worktree_id"]?.stringValue else {
         return .init(
           content: [txt("Missing required parameter: worktree_id")],
@@ -283,7 +283,7 @@ await server.withMethodHandler(CallTool.self) { params in
       }
       let response = try await client.send(
         fd: socketFD,
-        .spawnAgent(worktreeID: worktreeID, prompt: prompt, agent: agent)
+        .spawnSupagent(worktreeID: worktreeID, prompt: prompt, agent: agent)
       )
       guard case .spawned(let surfaceID) = response else {
         return errorResult(response)
@@ -293,10 +293,10 @@ await server.withMethodHandler(CallTool.self) { params in
       )
       let completion = await client.waitForCompletion(canonical: key)
       var result =
-        "Agent spawned in worktree \(worktreeID). surface_id: \(surfaceID)"
+        "Supagent spawned in worktree \(worktreeID). surface_id: \(surfaceID)"
       if !completion.messages.isEmpty {
         let joined = completion.messages.joined(separator: "\n\n")
-        result += "\n\nAgent response:\n\(joined)"
+        result += "\n\nSupagent response:\n\(joined)"
       }
       return .init(content: [txt(result)])
 
@@ -357,11 +357,11 @@ await server.withMethodHandler(CallTool.self) { params in
           return .init(content: [txt(joined)])
         }
         return .init(
-          content: [txt("Agent finished in worktree \(worktreeID)")]
+          content: [txt("Supagent finished in worktree \(worktreeID)")]
         )
       }
       return .init(
-        content: [txt("Message sent to agent in worktree \(worktreeID)")]
+        content: [txt("Message sent to supagent in worktree \(worktreeID)")]
       )
 
     case "read_screen":

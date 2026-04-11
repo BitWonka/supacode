@@ -20,7 +20,7 @@ final class MCPSocketServer {
   var getWorktreeTabInfo: ((Worktree.ID) -> [MCPTabInfo])?
   var readWorktreeScreen: ((Worktree.ID, String?, String?) -> String?)?
   /// Create an agent tab synchronously and return (tabID, surfaceID). Returns nil if creation fails.
-  var spawnAgentTab: ((Worktree, String, AgentKind) -> (tabID: String, surfaceID: String)?)?
+  var spawnSupagentTab: ((Worktree, String, AgentKind) -> (tabID: String, surfaceID: String)?)?
   var sendToWorktreeSurface: ((Worktree.ID, String, String?, String?) -> Bool)?
 
   func start() {
@@ -164,8 +164,8 @@ final class MCPSocketServer {
       return handleListWorktrees()
     case .getWorktreeStatus(let id):
       return handleGetWorktreeStatus(id)
-    case .spawnAgent(let id, let prompt, let agent):
-      return handleSpawnAgent(worktreeID: id, prompt: prompt, agent: agent)
+    case .spawnSupagent(let id, let prompt, let agent):
+      return handleSpawnSupagent(worktreeID: id, prompt: prompt, agent: agent)
     case .sendMessage(let id, let text, _, let tabID, let surfaceID):
       return handleSendMessage(worktreeID: id, text: text, tabID: tabID, surfaceID: surfaceID)
     case .readScreen(let id, let tabID, let surfaceID):
@@ -189,7 +189,7 @@ final class MCPSocketServer {
           repositoryID: repo.id,
           workingDirectory: worktree.workingDirectory.path(percentEncoded: false),
           taskStatus: running ? .running : .idle,
-          agentBusy: running,
+          supagentBusy: running,
           tabs: tabs,
         ))
       }
@@ -210,13 +210,13 @@ final class MCPSocketServer {
       repositoryName: found.repository.name,
       workingDirectory: found.worktree.workingDirectory.path(percentEncoded: false),
       taskStatus: running ? .running : .idle,
-      agentBusy: running,
+      supagentBusy: running,
       tabs: tabs,
       notificationCount: notifications.count,
     ))
   }
 
-  private func handleSpawnAgent(worktreeID: String, prompt: String?, agent: String?) -> MCPSocketResponse {
+  private func handleSpawnSupagent(worktreeID: String, prompt: String?, agent: String?) -> MCPSocketResponse {
     guard let found = findWorktree?(worktreeID) else {
       return .error("Worktree not found: \(worktreeID)")
     }
@@ -225,8 +225,8 @@ final class MCPSocketServer {
     }
     let resolvedPrompt = (prompt?.isEmpty ?? true) ? "hello" : prompt!
     let command = "\(agentKind.rawValue) \(shellQuote(resolvedPrompt))"
-    guard let result = spawnAgentTab?(found.worktree, command, agentKind) else {
-      return .error("Failed to create agent tab")
+    guard let result = spawnSupagentTab?(found.worktree, command, agentKind) else {
+      return .error("Failed to create supagent tab")
     }
     return .spawned(surfaceID: result.surfaceID)
   }
@@ -326,13 +326,13 @@ final class MCPSocketServer {
   ) -> String {
     let tabs = getWorktreeTabInfo?(worktreeID) ?? []
     guard !tabs.isEmpty else {
-      return "No terminal tabs in worktree. Use spawn_agent to create one."
+      return "No terminal tabs in worktree. Use spawn_supagent to create one."
     }
     let hasIDs = tabID != nil || surfaceID != nil
     let reason = hasIDs ? "The provided IDs did not match." : "You must provide surface_id."
     let available = tabs.flatMap(\.surfaces).map { surface in
-      let agent = surface.agentName ?? "shell"
-      let busy = surface.agentBusy ? "busy" : "idle"
+      let agent = surface.supagentName ?? "shell"
+      let busy = surface.supagentBusy ? "busy" : "idle"
       return "surface_id=\(surface.surfaceID) (\(agent), \(busy))"
     }
     return "Surface not found. \(reason) Available: \(available.joined(separator: ", "))"

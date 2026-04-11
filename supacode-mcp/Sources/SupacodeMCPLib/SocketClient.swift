@@ -213,7 +213,7 @@ package final class SocketClient: Sendable {
     case .event(let event):
       mcpLog("Received event: \(event)")
       // Match events to pending completions by exact surfaceID key.
-      if case .agentNotification(
+      if case .supagentNotification(
         let worktreeID, let surfaceID, _, _, _, let body
       ) = event {
         let decoded = worktreeID.removingPercentEncoding ?? worktreeID
@@ -230,7 +230,7 @@ package final class SocketClient: Sendable {
         }
         if matched { tryResolveCompletion(canonical: key) }
       }
-      if case .agentBusyChanged(
+      if case .supagentBusyChanged(
         let worktreeID, let surfaceID, let active
       ) = event {
         let decoded = worktreeID.removingPercentEncoding ?? worktreeID
