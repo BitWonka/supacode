@@ -25,7 +25,11 @@ package enum MCPSocketResponse: Codable {
 
 package enum MCPSocketEvent: Codable {
   case agentBusyChanged(worktreeID: String, surfaceID: String, active: Bool)
-  case agentNotification(worktreeID: String, surfaceID: String, agent: String, event: String, title: String?, body: String?)
+  case agentNotification(
+    worktreeID: String, surfaceID: String,
+    agent: String, event: String,
+    title: String?, body: String?
+  )
 }
 
 package enum MCPSocketMessage: Codable {

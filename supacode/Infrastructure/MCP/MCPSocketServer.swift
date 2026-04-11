@@ -134,9 +134,9 @@ final class MCPSocketServer {
           }
 
           if case .request(let id, let request) = message {
-            let response = await { @MainActor [weak self] () async -> MCPSocketResponse in
+            let response = await { @MainActor [weak self] () -> MCPSocketResponse in
               guard let self else { return .error("Server unavailable") }
-              return await self.handleRequest(request)
+              return self.handleRequest(request)
             }()
             await MainActor.run { [weak self] in
               self?.sendToClient(fd, .response(id: id, response))

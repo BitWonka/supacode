@@ -2,9 +2,11 @@ strict: true
 
 included:
   - supacode
+  - supacode-mcp
   - supacodeTests
 excluded:
   - ThirdParty/ghostty
+  - supacode-mcp/.build
 
 disabled_rules:
   - file_length

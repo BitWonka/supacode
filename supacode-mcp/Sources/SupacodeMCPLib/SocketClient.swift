@@ -9,13 +9,24 @@ package final class SocketClient: Sendable {
   private static let completionDebounce: Duration = .milliseconds(500)
   private let socketPath: String
   private let nextID = Mutex(0)
-  private let pendingRequests = Mutex<[Int: CheckedContinuation<MCPSocketResponse, any Error>]>([:])
+  private let pendingRequests = Mutex<
+    [Int: CheckedContinuation<MCPSocketResponse, any Error>]
+  >([:])
   package struct NotificationResult: Sendable {
     package let surfaceID: String?
     package let messages: [String]
   }
-  private let completionWaiters = Mutex<[String: [CheckedContinuation<NotificationResult, Never>]]>([:])
-  private let pendingMessages = Mutex<[String: (surfaceID: String?, messages: [String], hasNotification: Bool, isIdle: Bool, lastEventTime: ContinuousClock.Instant)]>([:])
+  package struct PendingCompletion: Sendable {
+    var surfaceID: String?
+    var messages: [String]
+    var hasNotification: Bool
+    var isIdle: Bool
+    var lastEventTime: ContinuousClock.Instant
+  }
+  private let completionWaiters = Mutex<
+    [String: [CheckedContinuation<NotificationResult, Never>]]
+  >([:])
+  private let pendingMessages = Mutex<[String: PendingCompletion]>([:])
   private let eventContinuation: AsyncStream<MCPSocketEvent>.Continuation
   package let eventStream: AsyncStream<MCPSocketEvent>
 
@@ -28,8 +39,8 @@ package final class SocketClient: Sendable {
 
   /// Connect and start the background read loop. Returns when connected.
   package func connect() throws -> Int32 {
-    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard fd >= 0 else {
+    let socketFD = socket(AF_UNIX, SOCK_STREAM, 0)
+    guard socketFD >= 0 else {
       throw SocketError.connectionFailed("Failed to create socket")
     }
 
@@ -37,7 +48,7 @@ package final class SocketClient: Sendable {
     addr.sun_family = sa_family_t(AF_UNIX)
     let pathBytes = socketPath.utf8CString
     guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
-      close(fd)
+      close(socketFD)
       throw SocketError.connectionFailed("Socket path too long")
     }
     _ = withUnsafeMutablePointer(to: &addr.sun_path) { sunPath in
@@ -45,28 +56,32 @@ package final class SocketClient: Sendable {
         memcpy(sunPath, buffer.baseAddress!, buffer.count)
       }
     }
-    let addrLen = socklen_t(MemoryLayout<sa_family_t>.size + pathBytes.count)
+    let addrLen = socklen_t(
+      MemoryLayout<sa_family_t>.size + pathBytes.count
+    )
     let result = withUnsafePointer(to: &addr) { ptr in
       ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-        Foundation.connect(fd, sockaddrPtr, addrLen)
+        Foundation.connect(socketFD, sockaddrPtr, addrLen)
       }
     }
     guard result == 0 else {
-      close(fd)
-      throw SocketError.connectionFailed("Cannot connect to Supacode (is the app running?)")
+      close(socketFD)
+      throw SocketError.connectionFailed(
+        "Cannot connect to Supacode (is the app running?)"
+      )
     }
-    return fd
+    return socketFD
   }
 
   /// Start the read loop on a connected FD. Call from a detached Task.
-  package func readLoop(fd: Int32) {
+  package func readLoop(fd socketFD: Int32) {
     var buffer = Data()
     var readBuf = [UInt8](repeating: 0, count: 8192)
 
     while true {
-      let n = read(fd, &readBuf, readBuf.count)
-      if n <= 0 { break }
-      buffer.append(contentsOf: readBuf[0..<n])
+      let bytesRead = read(socketFD, &readBuf, readBuf.count)
+      if bytesRead <= 0 { break }
+      buffer.append(contentsOf: readBuf[0..<bytesRead])
 
       while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
         let lineData = Data(buffer[buffer.startIndex..<newlineIndex])
@@ -88,7 +103,7 @@ package final class SocketClient: Sendable {
   }
 
   /// Send a request and await the response.
-  package func send(fd: Int32, _ request: MCPSocketRequest) async throws -> MCPSocketResponse {
+  package func send(fd socketFD: Int32, _ request: MCPSocketRequest) async throws -> MCPSocketResponse {
     let id = nextID.withLock { value in
       let current = value
       value += 1
@@ -101,11 +116,17 @@ package final class SocketClient: Sendable {
     return try await withCheckedThrowingContinuation { continuation in
       pendingRequests.withLock { $0[id] = continuation }
       let written = data.withUnsafeBytes { bytes in
-        write(fd, bytes.baseAddress!, bytes.count)
+        write(socketFD, bytes.baseAddress!, bytes.count)
       }
       if written != data.count {
-        let c = pendingRequests.withLock { $0.removeValue(forKey: id) }
-        c?.resume(throwing: SocketError.connectionFailed("Write failed (\(written)/\(data.count))"))
+        let removed = pendingRequests.withLock {
+          $0.removeValue(forKey: id)
+        }
+        removed?.resume(
+          throwing: SocketError.connectionFailed(
+            "Write failed (\(written)/\(data.count))"
+          )
+        )
       }
     }
   }
@@ -115,7 +136,15 @@ package final class SocketClient: Sendable {
   package func prepareCompletion(worktreeID: String, surfaceID: String) -> String {
     let canonical = worktreeID.removingPercentEncoding ?? worktreeID
     let key = "\(canonical)|\(surfaceID)"
-    pendingMessages.withLock { $0[key] = (surfaceID: nil, messages: [], hasNotification: false, isIdle: false, lastEventTime: .now) }
+    pendingMessages.withLock {
+      $0[key] = PendingCompletion(
+        surfaceID: nil,
+        messages: [],
+        hasNotification: false,
+        isIdle: false,
+        lastEventTime: .now
+      )
+    }
     return key
   }
 
@@ -125,8 +154,8 @@ package final class SocketClient: Sendable {
     return await withTaskGroup(of: NotificationResult.self) { group in
       group.addTask {
         await withCheckedContinuation { continuation in
-          self.completionWaiters.withLock { w in
-            w[canonical, default: []].append(continuation)
+          self.completionWaiters.withLock { waiters in
+            waiters[canonical, default: []].append(continuation)
           }
         }
       }
@@ -135,12 +164,20 @@ package final class SocketClient: Sendable {
           try? await Task.sleep(for: .seconds(30))
           let pending = self.pendingMessages.withLock { $0[canonical] }
           guard let pending else { break }
-          if ContinuousClock.now - pending.lastEventTime > .seconds(300) { break }
+          let elapsed = ContinuousClock.now - pending.lastEventTime
+          if elapsed > .seconds(300) { break }
         }
         // Drain waiters to avoid leaking continuations
-        let waiters = self.completionWaiters.withLock { $0.removeValue(forKey: canonical) ?? [] }
-        let pending = self.pendingMessages.withLock { $0.removeValue(forKey: canonical) }
-        let result = NotificationResult(surfaceID: pending?.surfaceID, messages: pending?.messages ?? [])
+        let waiters = self.completionWaiters.withLock {
+          $0.removeValue(forKey: canonical) ?? []
+        }
+        let pending = self.pendingMessages.withLock {
+          $0.removeValue(forKey: canonical)
+        }
+        let result = NotificationResult(
+          surfaceID: pending?.surfaceID,
+          messages: pending?.messages ?? []
+        )
         for waiter in waiters { waiter.resume(returning: result) }
         return result
       }
@@ -152,8 +189,12 @@ package final class SocketClient: Sendable {
 
   /// Cancel a prepared completion and drain any waiting continuations.
   package func cancelCompletion(canonical: String) {
-    pendingMessages.withLock { _ = $0.removeValue(forKey: canonical) }
-    let waiters = completionWaiters.withLock { $0.removeValue(forKey: canonical) ?? [] }
+    pendingMessages.withLock {
+      _ = $0.removeValue(forKey: canonical)
+    }
+    let waiters = completionWaiters.withLock {
+      $0.removeValue(forKey: canonical) ?? []
+    }
     let empty = NotificationResult(surfaceID: nil, messages: [])
     for waiter in waiters { waiter.resume(returning: empty) }
   }
@@ -172,20 +213,28 @@ package final class SocketClient: Sendable {
     case .event(let event):
       mcpLog("Received event: \(event)")
       // Match events to pending completions by exact surfaceID key.
-      if case .agentNotification(let worktreeID, let surfaceID, _, _, _, let body) = event {
-        let key = "\(worktreeID.removingPercentEncoding ?? worktreeID)|\(surfaceID)"
+      if case .agentNotification(
+        let worktreeID, let surfaceID, _, _, _, let body
+      ) = event {
+        let decoded = worktreeID.removingPercentEncoding ?? worktreeID
+        let key = "\(decoded)|\(surfaceID)"
         let matched = pendingMessages.withLock { pending in
           guard pending[key] != nil else { return false }
           pending[key]?.surfaceID = surfaceID
           pending[key]?.hasNotification = true
           pending[key]?.lastEventTime = .now
-          if let body, !body.isEmpty { pending[key]?.messages.append(body) }
+          if let body, !body.isEmpty {
+            pending[key]?.messages.append(body)
+          }
           return true
         }
         if matched { tryResolveCompletion(canonical: key) }
       }
-      if case .agentBusyChanged(let worktreeID, let surfaceID, let active) = event {
-        let key = "\(worktreeID.removingPercentEncoding ?? worktreeID)|\(surfaceID)"
+      if case .agentBusyChanged(
+        let worktreeID, let surfaceID, let active
+      ) = event {
+        let decoded = worktreeID.removingPercentEncoding ?? worktreeID
+        let key = "\(decoded)|\(surfaceID)"
         let matched = pendingMessages.withLock { pending in
           guard pending[key] != nil else { return false }
           pending[key]?.isIdle = !active
@@ -206,10 +255,19 @@ package final class SocketClient: Sendable {
     Task {
       try? await Task.sleep(for: Self.completionDebounce)
       let pending = self.pendingMessages.withLock { $0[canonical] }
-      guard let pending, pending.isIdle, pending.hasNotification else { return }
-      self.pendingMessages.withLock { _ = $0.removeValue(forKey: canonical) }
-      let result = NotificationResult(surfaceID: pending.surfaceID, messages: pending.messages)
-      let waiters = self.completionWaiters.withLock { $0.removeValue(forKey: canonical) ?? [] }
+      guard let pending, pending.isIdle, pending.hasNotification else {
+        return
+      }
+      self.pendingMessages.withLock {
+        _ = $0.removeValue(forKey: canonical)
+      }
+      let result = NotificationResult(
+        surfaceID: pending.surfaceID,
+        messages: pending.messages
+      )
+      let waiters = self.completionWaiters.withLock {
+        $0.removeValue(forKey: canonical) ?? []
+      }
       for waiter in waiters {
         waiter.resume(returning: result)
       }
